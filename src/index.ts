@@ -1,12 +1,11 @@
-//import template from "babel-template";
-
-// var _ = require('underscore');
-// var babel = require('babel');
-
-//export default function(babel) {
-// export default function({ types: t }) {
-module.exports = function({ types: t }) {
+export default function({ types: t }) {
 	console.info('transforming for typescript-ts...');
+
+  var start = -1,
+      observers = {},
+      listeners = {},
+      postConstuctSetters = {};
+
   // plugin options get passed into plugin visitors through the `state` variable
 
 /*
@@ -34,31 +33,74 @@ MyGreeting.register();
     return str.replace(/^[a-z]|(\-[a-z])/g, function($1){return $1.toUpperCase().replace('-','');});
   }
 
-  function parseAttributeValue(value) {
-
+  function createDecorator(name: string, value) {
+    return t.decorator(
+      t.callExpression(
+        t.identifier(name),
+        [t.stringLiteral(value)]
+      )
+    );
   }
 
+  function createDecoratorProperty(key: string, value: string) {
+    if(typeof value != 'string') {
+      value = value.toString();
+    }
+    return t.objectProperty(
+      t.identifier(key),
+      t.identifier(value)
+    );
+  }
+
+/*  function createTypeAnnotationBasedOnTypeof(type: string) {
+    if (type === "string") {
+      return t.stringTypeAnnotation();
+    } else if (type === "number") {
+      return t.numberTypeAnnotation();
+    } else if (type === "undefined") {
+      return t.voidTypeAnnotation();
+    } else if (type === "boolean") {
+      return t.booleanTypeAnnotation();
+    } else if (type === "function") {
+      return t.genericTypeAnnotation(t.identifier("Function"));
+    } else if (type === "object") {
+      return t.genericTypeAnnotation(t.identifier("Object"));
+    } else if (type === "symbol") {
+      return t.genericTypeAnnotation(t.identifier("Symbol"));
+    } else {
+      throw new Error("Invalid typeof value");
+    }
+  }*/
+
   function parseProperty(name: string, attributes) {
-    let type, value, readonly = false, decorator = [];
+    let type, value, isFunction, params, readonly = false, decoratorProps = [];
 
     attributes.forEach( (attribute) => {  
       let attr_name: string = attribute.key.name;
 
-      switch(attr_name):
+      switch(attr_name) {
       case 'type':
         // one of Boolean, Date, Number, String, Array or Object
-        type = attribute.value.value;
-        decorator.push(attr_name + ': ' + attribute.value.name);
+        // type = attribute.value.value;
+//        type = attribute.value; 
+//TODO - something like this?...
+        type = t.createTypeAnnotationBasedOnTypeof(attribute.value.name.toLowerCase());
+        // type = t.typeAnnotation(t.stringTypeAnnotation()),
+        decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.name));
         break;
       case 'value':
         // Default value for the property
-        if(t.isStringLiteral(attribute.value)) {
-          value = "'" + attribute.value.value + "'":
-          if(type === undefined) { type = 'String'; }
-        } else {
-          value = attribute.value.value;
-          if(t.isBooleanLiteral(attribute.value)) {
-            if(type === undefined) { type = 'Boolean'; }
+        value = attribute.value;
+        if(attribute.value.type == 'FunctionExpression') {
+          isFunction = true;
+          params = [];
+        }
+        if(type === undefined) {
+          if(t.isStringLiteral(attribute.value)) {
+// TODO: select proper type
+            type = t.typeAnnotation(t.stringTypeAnnotation());
+          } else if(t.isBooleanLiteral(attribute.value)) {
+            type = t.typeAnnotation(t.booleanTypeAnnotation());
           }
         }
         break;
@@ -67,64 +109,58 @@ MyGreeting.register();
         // fall-through
       case 'reflectToAttribute':
       case 'notify':
-        decorator.push(attr_name + ': ' + attribute.value.value);
+        decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
         break;
       case 'computed':
       case 'observer':
         // computed function call (as string)
-        decorator.push(attr_name + ': \'' + attribute.value.value + '\'');
+        decoratorProps.push(createDecoratorProperty(attr_name, '\'' + attribute.value.value + '\''));
         break;
       default:
         console.warn('Unexpected property attribute: ', attribute);
-        decorator.push(attr_name + ': ' + 
-                      (t.isStringLiteral(attribute.value) ?
-                        "'" + attribute.value.value + "'" :
-                        attribute.value.value));
+        decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
       }
-
-/*      if(t.isIdentifier(attribute.value)) {
-        if(attribute.key.name != 'value') {
-          decorator.push('type: ' + attribute.value.name);
-          if(attribute.key.name == 'type') {
-            declaration += ': ' + attribute.value.name.toLowerCase();
-          }
-        }
-      } else if(t.isStringLiteral(attribute.value)) {
-        if(attribute.key.name == 'value') {
-          declaration += ' = \'' + attribute.value.value + '\'';
-        } else {
-          decorator.push(attribute.key.name + ': \'' + attribute.value.value + '\'');
-          if(attribute.key.name == 'type') {
-            declaration += ': ' + attribute.value.name;
-          }
-        }
-      } else if(t.isBooleanLiteral(attribute.value)) {
-        if(attribute.key.name == 'value') {
-          declaration += ': boolean';
-        } else {
-          decorator.push(attribute.key.name + ': ' + attribute.value.value);
-        }
-      } else {
-        console.info('           ', attribute.key.name + ': ' + attribute.value.value, attribute.value.type);
-      }*/
     });
 
-    decorator   = '    @property({ ' + decorator.join(', ') + ' })';
-    declaration = '    public ';
+    let decorators = [t.decorator(
+          t.callExpression(
+            t.identifier('property'),
+            [t.objectExpression(decoratorProps)]
+          )
+        )];
+
+
+/*    // let decorator   = '    @property({ ' + decorators.join(', ') + ' })';
+    let declaration = '    public ';
     // if (readonly) {
     //   declaration += 'get ' + name + '()';
     // } else {
       declaration += name;
     // }
-    if(type !== undefined) {
-      declaration += ': ' + type.toLowerCase()
-    }
+    // if(type !== undefined) {
+    //   declaration += ': ' + type.toLowerCase()
+    // }
     if(value !== undefined) {
       declaration += ' = ' + value;
     }
-    declaration += ';'
+    declaration += ';'*/
 
-    return decorator + '\n' + declaration + '\n';
+    // return decorator + '\n' + declaration + '\n';
+
+    if(isFunction) {
+      // value is FunctionExpression
+// TODO: add to postConstruct      
+      // let body /*: Array<Statement> */ = value.body.body,
+      //     params = value.params,
+      //     directives /*: Array<Directive> */ = []; //t.directive(t.directiveLiteral('asdfasfd'))];
+      // body = t.blockStatement(body, directives);
+      // // kind, key, params, body, computed, static
+      // return t.ClassMethod('method', t.identifier(name), params, body); //, t.typeAnnotation(type), decorators) :
+      postConstuctSetters[name] = value.body.body;
+      return t.ClassProperty(t.identifier(name), undefined, t.typeAnnotation(type), decorators);
+    } else {
+      return t.ClassProperty(t.identifier(name), value, t.typeAnnotation(type), decorators);
+    }
   }
 
   const propertiesVisitor = {
@@ -202,7 +238,7 @@ MyGreeting.register();
         // TODO: use 'constructor' instead of 'factoryImpl', use the same params
         logPath(path.node.params.forEach( (param) => {
           console.info('     param: ', param.name);
-        });
+        }));
       } else if (observers[name]) {
         console.info('this is an observer:', observers[name]);
       } else if (listeners[name]) {
@@ -226,23 +262,43 @@ MyGreeting.register();
       }
   };
 
-  var start = -1,
-      observers = {},
-      listeners = {};
+  function parsePolymerFunctionSignatureProperties(elements: {value: string}[]) {
+    return elements.reduce( (results: any, signature: {value: string}) => {
+      results[signature.value.match(/([^\(]+).*/)[1]] = signature.value;
+      return results;
+    }, {});
+  }
+
+  function parsePolymerProperties(properties: {key: {name: string}, value: any}[]) /*: ClassProperty[] */ {
+    return properties.map( (property) => {
+      return parseProperty(<string> property.key.name, property.value.properties);
+    });
+  }
+
 
   return {
     visitor: {
+// TODO: insert '/// <reference path="../bower_components/polymer-ts/polymer-ts.d.ts" />'
+
       CallExpression(path) {
-        // For some reason we visit each identifier twice
+        // For some reason we visit each identifier twice        
         if(path.node.callee.start != start) {
           start = path.node.callee.start;
+
+          // path.container.leadingComments: Array.<CommentBlock | CommentLine>
+          // path.addComment/s(), 
+          // path.assertXxxx()
+          // path.find/Parent()
+          // path.get(key: string, context?: boolean|TraversalContext)
+          // path.getAncestry()   getData()     getFunctionParent()   
+          // getSibling(key)  getStatementParent()  getTypeAnnotation()
+          // path.insertAfter/Before(nodes)    replaceInline  replaceWith/Multiple/SourceString
+          // path.isXxxx()
+          // path.requeue
+
           if(path.node.callee.name == 'Polymer') {
             let elementName, className, extend,
-                properties = '';
-
-console.info('---------------------');
-// console.info(t);
-//            logPath(path);
+                properties /*: Array<ClassProperty> */ = [];
             
             // console.info('Polymer element config:', path.node.arguments[0].properties);
             path.node.arguments[0].properties.forEach(function(config) {
@@ -259,23 +315,22 @@ console.info('---------------------');
                 extend = value;
                 break;
               case 'properties':
-                config.value.properties.forEach(function(property) {
-                  properties += parseProperty(<string> property.key.name, property.value.properties);
-                });
+                properties = parsePolymerProperties(config.value.properties);
+                // config.value.properties.forEach(function(property) {
+                //   properties += parseProperty(<string> property.key.name, property.value.properties);
+                // });
                 break;
               case 'observers':
-                config.value.elements.forEach( (observer) => {
-                  observers[observer.value.match(/([^\(]+).*/)[1]] = observer.value;
-                });
+                observers = parsePolymerFunctionSignatureProperties(config.value.elements);
                 break;
               case 'listeners':
-                config.value.elements.forEach( (listener) => {
-                  listeners[listener.value.match(/([^\(]+).*/)[1]] = listener.value;
-                });
+                listeners = parsePolymerFunctionSignatureProperties(config.value.elements);
                 break;
               default:
                 // console.log("  " + key + ':', value, type);  
+                return;
               }
+              // TODO: skip = true; // don't add the standard Polymer properties to the polymer-ts class
             });
 
             path.traverse(polymerVisitor);
@@ -288,7 +343,7 @@ console.info('---------------------');
             // replacement += properties;
             replacement += '}';
             // replacement += className + '.register();';
-            console.info(replacement);
+            // console.info(replacement);
 
             console.info('console.info(path.node.replaceWithSourceString);......');
             // console.info(path.replaceWithSourceString);
@@ -298,27 +353,70 @@ console.info('---------------------');
             // path.parentPath.replaceWithSourceString(replacement);
             // path.parentPath.insertBefore(t.expressionStatement(t.stringLiteral("Because I'm easy come, easy go.")));
 
-            // path.remove();
-            path.insertAfter(t.classDeclaration(
+            // path.parentPath.remove();
+            //path.insertAfter(t.classDeclaration(
+            let decorators = [ createDecorator('component', elementName) ];
+            if(extend) {
+              decorators.push(createDecorator('extend', extend));
+            }
+
+
+            let params = [], constuctorBody /*: Array<Statement>*/ = [];
+
+            //postConstuctSetters.forEach( (postConstuctSetter) => {
+            for(var key in postConstuctSetters) {
+              let postConstuctSetter /*: BlockStatement | Expression */ = postConstuctSetters[key];
+              constuctorBody.push(t.expressionStatement(
+                                    t.AssignmentExpression('=', 
+                                      t.memberExpression(t.thisExpression(), t.identifier(key)),
+                                      t.callExpression(
+                                        t.arrowFunctionExpression([], 
+                                          t.blockStatement(postConstuctSetter)
+                                        ),
+                                        []
+                                      )
+                                    )
+                                  ));
+            }
+            if(constuctorBody.length) {
+              properties.push(t.classMethod('constructor', t.identifier('constructor'), params, t.blockStatement(constuctorBody)));
+            }
+
+            path.parentPath.replaceWith(t.classDeclaration(
                                                 // id: Identifier
                                                 t.identifier(className),
                                                 // superClass?: Expression
                                                 t.memberExpression(
                                                   t.identifier('polymer'),
-                                                  t.identifier('Base'),
+                                                  t.identifier('Base')
                                                 ),
                                                 // body: ClassBody
-                                                t.classBody([
+                                                t.classBody(properties),
+                                                /*t.classBody([
                                                   // Array.<ClassMethod|ClassProperty
-                                                ]),
+                                                  t.ClassProperty(
+                                                    t.identifier('key'),
+                                                    t.stringLiteral('value'),
+                                                    // typeAnnotation
+                                                    t.typeAnnotation(t.stringTypeAnnotation()),
+                                                    // decorators
+                                                    [
+                                                      t.decorator(
+                                                        t.callExpression(
+                                                          t.identifier('property'),
+                                                          [t.objectExpression([
+                                                            t.objectProperty(
+                                                              t.identifier('type'),
+                                                              t.identifier('String')
+                                                            )
+                                                          ])]
+                                                        )
+                                                      )
+                                                    ]
+                                                  )
+                                                ]),*/
                                                 // decorators: Array.<Decorator>
-                                                [
-                                                  t.decorator(
-                                                    t.callExpression(
-                                                        t.identifier('component'),
-                                                        [t.stringLiteral(elementName)]
-                                                    )
-                                                ]
+                                                decorators
                               ));
             // path.replaceWith(t.classExpression(t.identifier('ClassExpression')));
 

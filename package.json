@@ -1,0 +1,41 @@
+{
+  "name": "babel-plugin-polymer-to-typescript",
+  "version": "0.0.1",
+  "author": "Nicholas Albion",
+  "license": "ISC",
+  "description": "Babel transformer to convert standard Polymer 1.x projects to polymer-ts style",
+  "homepage": "https://github.com/nalbion/babel-plugin-polymer-to-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/nalbion/babel-plugin-polymer-to-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nalbion/babel-plugin-polymer-to-typescript/issues"
+  },
+  "keywords": [
+    "babel",
+    "polymer",
+    "typescript"
+  ],
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "devDependencies": {
+    "async": "^1.5.0",
+    "babel": "^6.3.26",
+    "babel-eslint": "^4.0.6",
+    "babel-preset-es2015": "^6.3.13",
+    "del": "^2.2.0",
+    "gulp-babel": "^6.1.1",
+    "gulp-newer": "^1.1.0",
+    "gulp-plumber": "^1.0.1",
+    "gulp-typescript": "^2.10.0",
+    "gulp-util": "^3.0.7",
+    "gulp-watch": "^4.3.5",
+    "through2": "^2.0.0"
+  },
+  "dependencies": {
+    "underscore": "^1.8.3"
+  }
+}

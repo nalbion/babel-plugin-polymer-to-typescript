@@ -28,7 +28,25 @@ export default function({ types: t }) {
 
   function parsePolymerFunctionSignatureProperties(elements: {value: string}[]) {
     return elements.reduce( (results: any, signature: {value: string}) => {
-      results[signature.value.match(/([^\(]+).*/)[1]] = signature.value;
+      let match = signature.value.match(/([^\(]+)\(([^\)]+)/),
+        functionName = match[1],
+        observedProperties = match[2];
+      results[functionName] = createDecorator('observe', observedProperties);
+      return results;
+    }, {});
+  }
+
+  function parsePolymerEventListenerProperties(properties) {
+    return properties.reduce( (results, property) => {
+      let eventName = property.key.value,
+          functionName = property.value.value,
+          functionEvents = results[functionName];
+
+      if(!functionEvents) {
+        functionEvents = results[functionName] = [];
+      }
+
+      functionEvents.push(createDecorator('listen', eventName));
       return results;
     }, {});
   }
@@ -38,48 +56,55 @@ export default function({ types: t }) {
         attributes = property.value.properties,
         type, value, isFunction, params, readonly = false, decoratorProps = [];
 
-    attributes.forEach( (attribute) => {  
-      let attr_name: string = attribute.key.name;
+    // console.info('!!!!!!  parsing property', name, attributes);
+    if(t.isIdentifier(property.value)) {
+      console.info('property.value:', property.value);
+      type = t.typeAnnotation(property.value.name);
+    } else {
+      attributes.forEach( (attribute) => {  
+        let attr_name: string = attribute.key.name;
 
-      switch(attr_name) {
-      case 'type':
-        // one of Boolean, Date, Number, String, Array or Object
-        type = t.createTypeAnnotationBasedOnTypeof(attribute.value.name.toLowerCase());
-        decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.name));
-        break;
-      case 'value':
-        // Default value for the property
-        value = attribute.value;
-        if(t.isFunctionExpression(attribute.value)) {
-          isFunction = true;
-          params = [];
-        }
-        if(type === undefined) {
-          if(t.isStringLiteral(attribute.value)) {
-// TODO: select proper type
-            type = t.typeAnnotation(t.stringTypeAnnotation());
-          } else if(t.isBooleanLiteral(attribute.value)) {
-            type = t.typeAnnotation(t.booleanTypeAnnotation());
+        switch(attr_name) {
+        case 'type':
+          // one of Boolean, Date, Number, String, Array or Object
+          type = t.createTypeAnnotationBasedOnTypeof(attribute.value.name.toLowerCase());
+          decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.name));
+          break;
+        case 'value':
+          // Default value for the property
+          value = attribute.value;
+          if(t.isFunctionExpression(attribute.value)) {
+            isFunction = true;
+            params = [];
           }
+          if(type === undefined) {
+            type = t.createTypeAnnotationBasedOnTypeof(value);
+  //           if(t.isStringLiteral(attribute.value)) {
+  // // TODO: select proper type
+  //             type = t.typeAnnotation(t.stringTypeAnnotation());
+  //           } else if(t.isBooleanLiteral(attribute.value)) {
+  //             type = t.typeAnnotation(t.booleanTypeAnnotation());
+  //           }
+          }
+          break;
+        case 'readonly':
+          readonly = true;
+          // fall-through
+        case 'reflectToAttribute':
+        case 'notify':
+          decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
+          break;
+        case 'computed':
+        case 'observer':
+          // computed function call (as string)
+          decoratorProps.push(createDecoratorProperty(attr_name, '\'' + attribute.value.value + '\''));
+          break;
+        default:
+          console.warn('Unexpected property attribute: ', attribute);
+          decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
         }
-        break;
-      case 'readonly':
-        readonly = true;
-        // fall-through
-      case 'reflectToAttribute':
-      case 'notify':
-        decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
-        break;
-      case 'computed':
-      case 'observer':
-        // computed function call (as string)
-        decoratorProps.push(createDecoratorProperty(attr_name, '\'' + attribute.value.value + '\''));
-        break;
-      default:
-        console.warn('Unexpected property attribute: ', attribute);
-        decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
-      }
-    });
+      });
+    }
 
     let decorators = [t.decorator(
           t.callExpression(
@@ -108,7 +133,7 @@ export default function({ types: t }) {
       params = node.value.params,
       body /*: Array<Statement */ = node.value.body.body;
 
-    let method = t.ClassMethod('method', t.identifier(name), params, t.blockStatement(body));
+    let method = t.classMethod('method', t.identifier(name), params, t.blockStatement(body));
     method.leadingComments = node.leadingComments;
     return method;
   }
@@ -154,15 +179,31 @@ export default function({ types: t }) {
                 observers = parsePolymerFunctionSignatureProperties(config.value.elements);
                 break;
               case 'listeners':
-                listeners = parsePolymerFunctionSignatureProperties(config.value.elements);
+                listeners = parsePolymerEventListenerProperties(config.value.properties);
                 break;
               default:
                 if(t.isFunctionExpression(config.value)) {
-                  let method = parseNonPolymerFunction(config);
+                  let method = parseNonPolymerFunction(config)
+
                   if(method.key.name == 'factoryImpl') {
                     method.key.name = method.kind = 'constructor';
                     constructor = method;
                   } else {
+                    // Add observer decorators
+                    let functionObserver = observers[method.key.name];
+                    if(functionObserver) {
+                      if(!method.decorators) { method.decorators = []; }
+                        method.decorators.push(functionObserver);
+                    }
+
+                    // Add listener decorators
+                    let functionListeners = listeners[method.key.name];
+                    if(functionListeners) {
+                      functionListeners.forEach( (listener) => {
+                        if(!method.decorators) { method.decorators = []; }
+                        method.decorators.push(listener);
+                      });
+                    }
                     functions.push(method);
                   }
                 } else {

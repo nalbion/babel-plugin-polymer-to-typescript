@@ -48,8 +48,13 @@
         },
 
         observers: [
-          'updateImage(preload, src, size)'
+          'updateImage(preload,src,size)'
         ],
+
+        listeners: {
+          'some-event': 'updateImage',
+          'another-event': 'updateImage'
+        },
 
         /** Called by constructor */
         factoryImpl: function(foo, bar) {

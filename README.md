@@ -18,7 +18,7 @@ Babel transformer to convert standard Polymer 1.x projects to [polymer-ts](https
 		"gulp-if": "^2.0.0",
 		"gulp-load-plugins": "^1.1.0",
 		"gulp-replace": "^0.5.4",
-		"babel-plugin-polymer-to-typescript": "^0.0.1",
+		"babel-plugin-polymer-to-typescript": "^0.0.2",
 	}
 }
 

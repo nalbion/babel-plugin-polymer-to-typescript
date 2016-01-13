@@ -11,15 +11,6 @@ var watch   = require('gulp-watch');
 
 var scripts = ['src/**/*.ts'];
 var dest = 'lib';
-// var srcEx = 'src', libFragment = 'lib';
-
-// if (path.win32 === path) {
-//   srcEx = /(packages\\[^\\]+)\\src\\/;
-//   libFragment = "$1\\lib\\";
-// } else {
-//   srcEx = new RegExp("(packages/[^/]+)/src/");
-//   libFragment = "$1/lib/";
-// }
 
 gulp.task("default", ["build"]);
 

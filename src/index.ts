@@ -72,8 +72,112 @@ MyGreeting.register();
     }
   }*/
 
-  function parseProperty(name: string, attributes) {
-    let type, value, isFunction, params, readonly = false, decoratorProps = [];
+  
+
+/*  const propertiesVisitor = {
+    // ObjectExpression(path) {
+    ObjectProperty(path) {
+      if(t.isObjectExpression(path.node.value)) {
+        path.traverse(propertyVisitor);
+      } else {
+
+      // console.info('    *************** oe: ', path.node);
+      var node = path.node,
+        key = node.key.name,
+        type = node.value.type,
+        value = node.value.value;
+      console.log("      @property ", key + ':', value, type);  
+      }
+    }
+  };
+
+  const propertyVisitor = {
+    ObjectProperty(path) {
+      // console.info('    *************** oe: ', path.node);
+      var prop = path.node;
+      
+          // path.node.value.properties.forEach( function(prop) {
+
+            if(t.isIdentifier(prop.value)) {
+              console.info('           ', prop.key.name + ': ' + prop.value.name);
+            } else if(t.isStringLiteral(prop.value)) {
+              console.info('           ', prop.key.name + ': \'' + prop.value.value + '\'');
+            } else if(t.isBooleanLiteral(prop.value)) {
+              console.info('           ', prop.key.name + ': ' + prop.value.value);
+            } else {
+              console.info('           ', prop.key.name + ': ' + prop.value.value, prop.value.type);
+            }
+          // });
+    }
+  }; */
+
+  
+
+  const polymerVisitor = {
+    // ObjectProperty(path) {
+    //   var node = path.node,
+    //     key = node.key.name,
+    //     type = node.value.type,
+    //     value = node.value.value;
+    //   switch(key) {
+    //   case 'is':
+    //     console.log('  class ' + toUpperCamel(value) + ' extends polymer.Base {');
+    //     break;
+    //   case 'properties':
+    //     // console.log("  @property()" + key);
+    //     // console.log("   ...", value, type);  
+    //     path.traverse(propertiesVisitor);
+    //     break;
+    //   default:
+    //     console.log("  " + key + ':', value, type);  
+    //   }
+    // },
+    FunctionExpression(path) {
+      var name = path.scope.parentBlock.key.name;
+      console.log("  Visiting FunctionExpression: ", name);
+      if(name == 'factoryImpl') {
+        // TODO: use 'constructor' instead of 'factoryImpl', use the same params
+        logPath(path.node.params.forEach( (param) => {
+          console.info('     param: ', param.name);
+        }));
+      } else if (observers[name]) {
+        console.info('this is an observer:', observers[name]);
+      } else if (listeners[name]) {
+        console.info('this is a listener:', listeners[name]);
+      }
+
+
+      // logPath(path.scope.parentBlock);
+    },
+
+    MemberExpression(path) {
+      // console.log("  Visiting MemberExpression: ", path.type, path.node.name);
+    },
+
+    Identifier(path) {
+        // console.log("  Visiting: ", path.type, path.node.name);
+      //  console.info('path:', path.node);
+        if (path.isReferencedIdentifier()) {
+          // ...
+        }
+      }
+  };
+
+  function parsePolymerFunctionSignatureProperties(elements: {value: string}[]) {
+    return elements.reduce( (results: any, signature: {value: string}) => {
+      results[signature.value.match(/([^\(]+).*/)[1]] = signature.value;
+      return results;
+    }, {});
+  }
+
+  function parsePolymerProperties(properties: {key: {name: string}, value: any}[]) /*: ClassProperty[] */ {
+    return properties.map(parseProperty);
+  }
+
+  function parseProperty(property) {
+    let name: string = property.key.name,
+        attributes = property.value.properties,
+        type, value, isFunction, params, readonly = false, decoratorProps = [];
 
     attributes.forEach( (attribute) => {  
       let attr_name: string = attribute.key.name;
@@ -157,122 +261,23 @@ MyGreeting.register();
       // // kind, key, params, body, computed, static
       // return t.ClassMethod('method', t.identifier(name), params, body); //, t.typeAnnotation(type), decorators) :
       postConstuctSetters[name] = value.body.body;
-      return t.ClassProperty(t.identifier(name), undefined, t.typeAnnotation(type), decorators);
+      var result = t.ClassProperty(t.identifier(name), undefined, t.typeAnnotation(type), decorators);
     } else {
-      return t.ClassProperty(t.identifier(name), value, t.typeAnnotation(type), decorators);
+      var result = t.ClassProperty(t.identifier(name), value, t.typeAnnotation(type), decorators);
     }
+
+    result.leadingComments = property.leadingComments;
+    return result;
   }
 
-  const propertiesVisitor = {
-    // ObjectExpression(path) {
-    ObjectProperty(path) {
-      if(t.isObjectExpression(path.node.value)) {
-        path.traverse(propertyVisitor);
-      } else {
+  function parseNonPolymerFunction(node) {
+    let name = node.key.name,
+      params = node.value.params,
+      body /*: Array<Statement */ = node.value.body.body;
 
-      // console.info('    *************** oe: ', path.node);
-      var node = path.node,
-        key = node.key.name,
-        type = node.value.type,
-        value = node.value.value;
-      console.log("      @property ", key + ':', value, type);  
-      }
-    }
-  };
-
-  const propertyVisitor = {
-    ObjectProperty(path) {
-      // console.info('    *************** oe: ', path.node);
-      var prop = path.node;
-      
-          // path.node.value.properties.forEach( function(prop) {
-
-            if(t.isIdentifier(prop.value)) {
-              console.info('           ', prop.key.name + ': ' + prop.value.name);
-            } else if(t.isStringLiteral(prop.value)) {
-              console.info('           ', prop.key.name + ': \'' + prop.value.value + '\'');
-            } else if(t.isBooleanLiteral(prop.value)) {
-              console.info('           ', prop.key.name + ': ' + prop.value.value);
-            } else {
-              console.info('           ', prop.key.name + ': ' + prop.value.value, prop.value.type);
-            }
-          // });
-    }
-  };
-
-  function logPath(path) {
-    for(var propName in path) {
-        if(path.hasOwnProperty(propName) 
-          && propName != 'parentPath' && propName != 'parent' 
-          && propName != 'hub'
-          && propName != 'container') {
-          console.log(propName, path[propName]);
-          //console.log(propName);
-        }
-      }
-  }
-
-  const polymerVisitor = {
-    // ObjectProperty(path) {
-    //   var node = path.node,
-    //     key = node.key.name,
-    //     type = node.value.type,
-    //     value = node.value.value;
-    //   switch(key) {
-    //   case 'is':
-    //     console.log('  class ' + toUpperCamel(value) + ' extends polymer.Base {');
-    //     break;
-    //   case 'properties':
-    //     // console.log("  @property()" + key);
-    //     // console.log("   ...", value, type);  
-    //     path.traverse(propertiesVisitor);
-    //     break;
-    //   default:
-    //     console.log("  " + key + ':', value, type);  
-    //   }
-    // },
-    FunctionExpression(path) {
-      var name = path.scope.parentBlock.key.name;
-      console.log("  Visiting FunctionExpression: ", name);
-      if(name == 'factoryImpl') {
-        // TODO: use 'constructor' instead of 'factoryImpl', use the same params
-        logPath(path.node.params.forEach( (param) => {
-          console.info('     param: ', param.name);
-        }));
-      } else if (observers[name]) {
-        console.info('this is an observer:', observers[name]);
-      } else if (listeners[name]) {
-        console.info('this is a listener:', listeners[name]);
-      }
-
-
-      // logPath(path.scope.parentBlock);
-    },
-
-    MemberExpression(path) {
-      // console.log("  Visiting MemberExpression: ", path.type, path.node.name);
-    },
-
-    Identifier(path) {
-        // console.log("  Visiting: ", path.type, path.node.name);
-      //  console.info('path:', path.node);
-        if (path.isReferencedIdentifier()) {
-          // ...
-        }
-      }
-  };
-
-  function parsePolymerFunctionSignatureProperties(elements: {value: string}[]) {
-    return elements.reduce( (results: any, signature: {value: string}) => {
-      results[signature.value.match(/([^\(]+).*/)[1]] = signature.value;
-      return results;
-    }, {});
-  }
-
-  function parsePolymerProperties(properties: {key: {name: string}, value: any}[]) /*: ClassProperty[] */ {
-    return properties.map( (property) => {
-      return parseProperty(<string> property.key.name, property.value.properties);
-    });
+    let method = t.ClassMethod('method', t.identifier(name), params, t.blockStatement(body));
+    method.leadingComments = node.leadingComments;
+    return method;
   }
 
 
@@ -298,7 +303,9 @@ MyGreeting.register();
 
           if(path.node.callee.name == 'Polymer') {
             let elementName, className, extend,
-                properties /*: Array<ClassProperty> */ = [];
+                properties /*: Array<ClassProperty> */ = [],
+                constructor,
+                functions /*: Array<ClassMethod>*/ = [];
             
             // console.info('Polymer element config:', path.node.arguments[0].properties);
             path.node.arguments[0].properties.forEach(function(config) {
@@ -328,7 +335,13 @@ MyGreeting.register();
                 break;
               default:
                 // console.log("  " + key + ':', value, type);  
-                return;
+                let method = parseNonPolymerFunction(config);
+                if(method.key.name == 'factoryImpl') {
+                  method.key.name = method.kind = 'constructor';
+                  constructor = method;
+                } else {
+                  functions.push(method);
+                }
               }
               // TODO: skip = true; // don't add the standard Polymer properties to the polymer-ts class
             });
@@ -361,7 +374,7 @@ MyGreeting.register();
             }
 
 
-            let params = [], constuctorBody /*: Array<Statement>*/ = [];
+            let constuctorBody /*: Array<Statement>*/ = constructor ? constructor.body.body : [];
 
             //postConstuctSetters.forEach( (postConstuctSetter) => {
             for(var key in postConstuctSetters) {
@@ -379,7 +392,7 @@ MyGreeting.register();
                                   ));
             }
             if(constuctorBody.length) {
-              properties.push(t.classMethod('constructor', t.identifier('constructor'), params, t.blockStatement(constuctorBody)));
+              properties.push(constructor || t.classMethod('constructor', t.identifier('constructor'), [], t.blockStatement(constuctorBody)));
             }
 
             path.parentPath.replaceWith(t.classDeclaration(
@@ -391,7 +404,7 @@ MyGreeting.register();
                                                   t.identifier('Base')
                                                 ),
                                                 // body: ClassBody
-                                                t.classBody(properties),
+                                                t.classBody(properties.concat(functions)),
                                                 /*t.classBody([
                                                   // Array.<ClassMethod|ClassProperty
                                                   t.ClassProperty(
@@ -445,6 +458,18 @@ MyGreeting.register();
     }
   }
 }
+
+function logPath(path) {
+    for(var propName in path) {
+      if(path.hasOwnProperty(propName) 
+        && propName != 'parentPath' && propName != 'parent' 
+        && propName != 'hub'
+        && propName != 'container') {
+        console.log(propName, path[propName]);
+        //console.log(propName);
+      }
+    }
+  }
 
 /*
 Polymer({

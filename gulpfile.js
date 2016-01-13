@@ -35,8 +35,8 @@ gulp.task("build", function () {
       }
     }))
     .pipe(ts({
-      noImplicitAny: true,
-      target: 'es5'
+      target: 'es5',
+      module: 'CommonJS'
     }))
     // .pipe(through.obj(function (file, enc, callback) {
     //   file._path = file.path;

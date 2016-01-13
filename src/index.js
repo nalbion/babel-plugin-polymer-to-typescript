@@ -1,7 +1,7 @@
 function default_1(_a) {
     var t = _a.types;
     console.info('transforming for typescript-ts...');
-    var start = -1, observers = {}, listeners = {};
+    var start = -1, observers = {}, listeners = {}, postConstuctSetters = {};
     // plugin options get passed into plugin visitors through the `state` variable
     /*
     Polymer({
@@ -26,116 +26,70 @@ function default_1(_a) {
     function toUpperCamel(str) {
         return str.replace(/^[a-z]|(\-[a-z])/g, function ($1) { return $1.toUpperCase().replace('-', ''); });
     }
+    function createDecorator(name, value) {
+        return t.decorator(t.callExpression(t.identifier(name), [t.stringLiteral(value)]));
+    }
     function createDecoratorProperty(key, value) {
-        return t.objectExpression([
-            t.objectProperty(t.identifier(key), t.identifier(value))
-        ]);
+        if (typeof value != 'string') {
+            value = value.toString();
+        }
+        return t.objectProperty(t.identifier(key), t.identifier(value));
     }
-    function parseProperty(name, attributes) {
-        var type, value, readonly = false, decorators = [];
-        attributes.forEach(function (attribute) {
-            var attr_name = attribute.key.name;
-            switch (attr_name) {
-                case 'type':
-                    // one of Boolean, Date, Number, String, Array or Object
-                    // type = attribute.value.value;
-                    //        type = attribute.value; 
-                    //TODO - something like this?...  
-                    type = t.typeAnnotation(t.stringTypeAnnotation()),
-                        decorators.push(createDecoratorProperty(attr_name, attribute.value.name));
-                    break;
-                case 'value':
-                    // Default value for the property
-                    value = attribute.value;
-                    if (type === undefined) {
-                        if (t.isStringLiteral(attribute.value)) {
-                            // TODO: select proper type
-                            type = t.typeAnnotation(t.stringTypeAnnotation());
-                        }
-                        else if (t.isBooleanLiteral(attribute.value)) {
-                            type = t.typeAnnotation(t.booleanTypeAnnotation());
-                        }
-                    }
-                    break;
-                case 'readonly':
-                    readonly = true;
-                // fall-through
-                case 'reflectToAttribute':
-                case 'notify':
-                    decorators.push(createDecoratorProperty(attr_name, attribute.value.value));
-                    break;
-                case 'computed':
-                case 'observer':
-                    // computed function call (as string)
-                    //TODO: test        //decorators.push(attr_name + ': \'' + attribute.value.value + '\'');
-                    decorators.push(createDecoratorProperty(attr_name, attribute.value.value));
-                    break;
-                default:
-                    console.warn('Unexpected property attribute: ', attribute);
-                    decorators.push(createDecoratorProperty(attr_name, attribute.value.value));
-            }
-        });
-        decorators = [t.decorator(t.callExpression(t.identifier('property'), []))];
-        /*    // let decorator   = '    @property({ ' + decorators.join(', ') + ' })';
-            let declaration = '    public ';
-            // if (readonly) {
-            //   declaration += 'get ' + name + '()';
-            // } else {
-              declaration += name;
-            // }
-            // if(type !== undefined) {
-            //   declaration += ': ' + type.toLowerCase()
-            // }
-            if(value !== undefined) {
-              declaration += ' = ' + value;
-            }
-            declaration += ';'*/
-        // return decorator + '\n' + declaration + '\n';
-        return t.ClassProperty(t.identifier(name), value, type, decorators);
-    }
-    var propertiesVisitor = {
+    /*  function createTypeAnnotationBasedOnTypeof(type: string) {
+        if (type === "string") {
+          return t.stringTypeAnnotation();
+        } else if (type === "number") {
+          return t.numberTypeAnnotation();
+        } else if (type === "undefined") {
+          return t.voidTypeAnnotation();
+        } else if (type === "boolean") {
+          return t.booleanTypeAnnotation();
+        } else if (type === "function") {
+          return t.genericTypeAnnotation(t.identifier("Function"));
+        } else if (type === "object") {
+          return t.genericTypeAnnotation(t.identifier("Object"));
+        } else if (type === "symbol") {
+          return t.genericTypeAnnotation(t.identifier("Symbol"));
+        } else {
+          throw new Error("Invalid typeof value");
+        }
+      }*/
+    /*  const propertiesVisitor = {
         // ObjectExpression(path) {
-        ObjectProperty: function (path) {
-            if (t.isObjectExpression(path.node.value)) {
-                path.traverse(propertyVisitor);
-            }
-            else {
-                // console.info('    *************** oe: ', path.node);
-                var node = path.node, key = node.key.name, type = node.value.type, value = node.value.value;
-                console.log("      @property ", key + ':', value, type);
-            }
+        ObjectProperty(path) {
+          if(t.isObjectExpression(path.node.value)) {
+            path.traverse(propertyVisitor);
+          } else {
+    
+          // console.info('    *************** oe: ', path.node);
+          var node = path.node,
+            key = node.key.name,
+            type = node.value.type,
+            value = node.value.value;
+          console.log("      @property ", key + ':', value, type);
+          }
         }
-    };
-    var propertyVisitor = {
-        ObjectProperty: function (path) {
-            // console.info('    *************** oe: ', path.node);
-            var prop = path.node;
-            // path.node.value.properties.forEach( function(prop) {
-            if (t.isIdentifier(prop.value)) {
-                console.info('           ', prop.key.name + ': ' + prop.value.name);
-            }
-            else if (t.isStringLiteral(prop.value)) {
-                console.info('           ', prop.key.name + ': \'' + prop.value.value + '\'');
-            }
-            else if (t.isBooleanLiteral(prop.value)) {
-                console.info('           ', prop.key.name + ': ' + prop.value.value);
-            }
-            else {
-                console.info('           ', prop.key.name + ': ' + prop.value.value, prop.value.type);
-            }
-            // });
+      };
+    
+      const propertyVisitor = {
+        ObjectProperty(path) {
+          // console.info('    *************** oe: ', path.node);
+          var prop = path.node;
+          
+              // path.node.value.properties.forEach( function(prop) {
+    
+                if(t.isIdentifier(prop.value)) {
+                  console.info('           ', prop.key.name + ': ' + prop.value.name);
+                } else if(t.isStringLiteral(prop.value)) {
+                  console.info('           ', prop.key.name + ': \'' + prop.value.value + '\'');
+                } else if(t.isBooleanLiteral(prop.value)) {
+                  console.info('           ', prop.key.name + ': ' + prop.value.value);
+                } else {
+                  console.info('           ', prop.key.name + ': ' + prop.value.value, prop.value.type);
+                }
+              // });
         }
-    };
-    function logPath(path) {
-        for (var propName in path) {
-            if (path.hasOwnProperty(propName)
-                && propName != 'parentPath' && propName != 'parent'
-                && propName != 'hub'
-                && propName != 'container') {
-                console.log(propName, path[propName]);
-            }
-        }
-    }
+      }; */
     var polymerVisitor = {
         // ObjectProperty(path) {
         //   var node = path.node,
@@ -189,12 +143,93 @@ function default_1(_a) {
         }, {});
     }
     function parsePolymerProperties(properties) {
-        return properties.map(function (property) {
-            return parseProperty(property.key.name, property.value.properties);
+        return properties.map(parseProperty);
+    }
+    function parseProperty(property) {
+        var name = property.key.name, attributes = property.value.properties, type, value, isFunction, params, readonly = false, decoratorProps = [];
+        attributes.forEach(function (attribute) {
+            var attr_name = attribute.key.name;
+            switch (attr_name) {
+                case 'type':
+                    // one of Boolean, Date, Number, String, Array or Object
+                    // type = attribute.value.value;
+                    //        type = attribute.value; 
+                    //TODO - something like this?...
+                    type = t.createTypeAnnotationBasedOnTypeof(attribute.value.name.toLowerCase());
+                    // type = t.typeAnnotation(t.stringTypeAnnotation()),
+                    decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.name));
+                    break;
+                case 'value':
+                    // Default value for the property
+                    value = attribute.value;
+                    if (attribute.value.type == 'FunctionExpression') {
+                        isFunction = true;
+                        params = [];
+                    }
+                    if (type === undefined) {
+                        if (t.isStringLiteral(attribute.value)) {
+                            // TODO: select proper type
+                            type = t.typeAnnotation(t.stringTypeAnnotation());
+                        }
+                        else if (t.isBooleanLiteral(attribute.value)) {
+                            type = t.typeAnnotation(t.booleanTypeAnnotation());
+                        }
+                    }
+                    break;
+                case 'readonly':
+                    readonly = true;
+                // fall-through
+                case 'reflectToAttribute':
+                case 'notify':
+                    decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
+                    break;
+                case 'computed':
+                case 'observer':
+                    // computed function call (as string)
+                    decoratorProps.push(createDecoratorProperty(attr_name, '\'' + attribute.value.value + '\''));
+                    break;
+                default:
+                    console.warn('Unexpected property attribute: ', attribute);
+                    decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
+            }
         });
+        var decorators = [t.decorator(t.callExpression(t.identifier('property'), [t.objectExpression(decoratorProps)]))];
+        /*    // let decorator   = '    @property({ ' + decorators.join(', ') + ' })';
+            let declaration = '    public ';
+            // if (readonly) {
+            //   declaration += 'get ' + name + '()';
+            // } else {
+              declaration += name;
+            // }
+            // if(type !== undefined) {
+            //   declaration += ': ' + type.toLowerCase()
+            // }
+            if(value !== undefined) {
+              declaration += ' = ' + value;
+            }
+            declaration += ';'*/
+        // return decorator + '\n' + declaration + '\n';
+        if (isFunction) {
+            // value is FunctionExpression
+            // TODO: add to postConstruct      
+            // let body /*: Array<Statement> */ = value.body.body,
+            //     params = value.params,
+            //     directives /*: Array<Directive> */ = []; //t.directive(t.directiveLiteral('asdfasfd'))];
+            // body = t.blockStatement(body, directives);
+            // // kind, key, params, body, computed, static
+            // return t.ClassMethod('method', t.identifier(name), params, body); //, t.typeAnnotation(type), decorators) :
+            postConstuctSetters[name] = value.body.body;
+            var result = t.ClassProperty(t.identifier(name), undefined, t.typeAnnotation(type), decorators);
+        }
+        else {
+            var result = t.ClassProperty(t.identifier(name), value, t.typeAnnotation(type), decorators);
+        }
+        result.leadingComments = property.leadingComments;
+        return result;
     }
     return {
         visitor: {
+            // TODO: insert '/// <reference path="../bower_components/polymer-ts/polymer-ts.d.ts" />'
             CallExpression: function (path) {
                 // For some reason we visit each identifier twice        
                 if (path.node.callee.start != start) {
@@ -258,7 +293,21 @@ function default_1(_a) {
                         // path.parentPath.replaceWithSourceString(replacement);
                         // path.parentPath.insertBefore(t.expressionStatement(t.stringLiteral("Because I'm easy come, easy go.")));
                         // path.parentPath.remove();
-                        path.insertAfter(t.classDeclaration(
+                        //path.insertAfter(t.classDeclaration(
+                        var decorators = [createDecorator('component', elementName)];
+                        if (extend) {
+                            decorators.push(createDecorator('extend', extend));
+                        }
+                        var params = [], constuctorBody /*: Array<Statement>*/ = [];
+                        //postConstuctSetters.forEach( (postConstuctSetter) => {
+                        for (var key in postConstuctSetters) {
+                            var postConstuctSetter /*: BlockStatement | Expression */ = postConstuctSetters[key];
+                            constuctorBody.push(t.expressionStatement(t.AssignmentExpression('=', t.memberExpression(t.thisExpression(), t.identifier(key)), t.callExpression(t.arrowFunctionExpression([], t.blockStatement(postConstuctSetter)), []))));
+                        }
+                        if (constuctorBody.length) {
+                            properties.push(t.classMethod('constructor', t.identifier('constructor'), params, t.blockStatement(constuctorBody)));
+                        }
+                        path.parentPath.replaceWith(t.classDeclaration(
                         // id: Identifier
                         t.identifier(className), 
                         // superClass?: Expression
@@ -289,9 +338,7 @@ function default_1(_a) {
                           )
                         ]),*/
                         // decorators: Array.<Decorator>
-                        [
-                            t.decorator(t.callExpression(t.identifier('component'), [t.stringLiteral(elementName)]))
-                        ]));
+                        decorators));
                     }
                 }
             }
@@ -299,6 +346,16 @@ function default_1(_a) {
     };
 }
 exports["default"] = default_1;
+function logPath(path) {
+    for (var propName in path) {
+        if (path.hasOwnProperty(propName)
+            && propName != 'parentPath' && propName != 'parent'
+            && propName != 'hub'
+            && propName != 'container') {
+            console.log(propName, path[propName]);
+        }
+    }
+}
 /*
 Polymer({
   is: 'my-greeting',

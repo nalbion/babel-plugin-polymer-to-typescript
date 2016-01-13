@@ -1,5 +1,9 @@
-Babel transformer to convert standard Polymer 1.x projects to polymer-ts style
+Babel transformer to convert standard Polymer 1.x projects to [polymer-ts](https://github.com/nippur72/PolymerTS) style.
 
+
+## Options
+
+ - `userBehaviorDecorator` - if `true` use `@behavior(SomeBehavior)`  for each behavior.  If `false` (default) use Mixins
 
 ## Using with Gulp
 
@@ -9,8 +13,15 @@ gulp.task('polymer-to-typescript', function() {
     .pipe($.crisper({scriptInHead: false}))
     .pipe($.if('*.html', $.replace(/^<html><head>|<\/head><body>|<\/body><\/html>/g, '')))
     .pipe($.if('*.js', $.babel({
-      "plugins": ["polymer-to-typescript"]
+      "plugins": ["polymer-to-typescript", {
+		  "useBehaviorDecorator": true
+      	}
+      }]
     })))
     .pipe(gulp.dest('dist'));
 });
 ```
+
+## Contributing
+
+PRs are welcome.  I found the [AST Explorer](http://astexplorer.net/) very useful to gain an understanding of the structure of the original code and the code to be generated.  Another good reference was the README for [babel-types](https://github.com/babel/babel/tree/master/packages/babel-types).

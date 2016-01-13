@@ -1,0 +1,71 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<dom-module id="example-element">
+  <template>
+    <style include="shared-styles"></style>
+    <style>
+      :host {
+        display: block;
+      }
+    </style>
+    <h2 class="page-title">{{greeting}}</h2>
+    <span class="paper-font-body2">Update text to change the greeting.</span>
+    <!-- Listens for "input" event and sets greeting to <input>.value -->
+    <input class="paper-font-body2" value="{{greeting::input}}">
+  </template>
+
+  <script>
+      /** This is a demo element */
+      Polymer({
+        is: 'example-element',
+        // extends: 'p',
+        behaviors: [HighlightBehavior, OtherBehavior],
+
+        // properties
+        properties: {
+          /** Greeting message to be displayed */
+          greeting: {
+            type: String,
+            value: 'Welcome!',
+            notify: true
+          },
+
+          foo: {
+            type: Boolean,
+            observer: 'configureWithBar(bar)'
+          },
+
+          bar: {
+            type: Object,
+            value: function() {
+              return this.greeting + ' Bar!';
+            }
+          }
+        },
+
+        hostAttributes: {
+          tabindex: 0
+        },
+
+        observers: [
+          'updateImage(preload, src, size)'
+        ],
+
+        /** Called by constructor */
+        factoryImpl: function(foo, bar) {
+          this.foo = foo;
+          this.configureWithBar(bar);
+        },
+
+        /** observer for foo */
+        configureWithBar: function(bar) {
+          console.info(this.foo, bar);
+        },
+
+        updateImage: function(preload, src, size) {
+          // ... do work using dependent values
+          console.info('do something');
+        }
+      });
+  </script>
+</dom-module>

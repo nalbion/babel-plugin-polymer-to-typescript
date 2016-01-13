@@ -34,12 +34,12 @@ MyGreeting.register();
   }
 
   function createDecorator(name: string, value) {
-    return t.decorator(
-      t.callExpression(
-        t.identifier(name),
-        [t.stringLiteral(value)]
-      )
-    );
+    // if(typeof value == 'string') {
+      return t.decorator(t.callExpression(t.identifier(name), 
+              [typeof value == 'string' ? t.stringLiteral(value) : value]));
+    // } else {
+    //   return t.decorator(t.callExpression(t.identifier(name), [t.stringLiteral(value)]));
+    // }
   }
 
   function createDecoratorProperty(key: string, value: string) {
@@ -52,117 +52,6 @@ MyGreeting.register();
     );
   }
 
-/*  function createTypeAnnotationBasedOnTypeof(type: string) {
-    if (type === "string") {
-      return t.stringTypeAnnotation();
-    } else if (type === "number") {
-      return t.numberTypeAnnotation();
-    } else if (type === "undefined") {
-      return t.voidTypeAnnotation();
-    } else if (type === "boolean") {
-      return t.booleanTypeAnnotation();
-    } else if (type === "function") {
-      return t.genericTypeAnnotation(t.identifier("Function"));
-    } else if (type === "object") {
-      return t.genericTypeAnnotation(t.identifier("Object"));
-    } else if (type === "symbol") {
-      return t.genericTypeAnnotation(t.identifier("Symbol"));
-    } else {
-      throw new Error("Invalid typeof value");
-    }
-  }*/
-
-  
-
-/*  const propertiesVisitor = {
-    // ObjectExpression(path) {
-    ObjectProperty(path) {
-      if(t.isObjectExpression(path.node.value)) {
-        path.traverse(propertyVisitor);
-      } else {
-
-      // console.info('    *************** oe: ', path.node);
-      var node = path.node,
-        key = node.key.name,
-        type = node.value.type,
-        value = node.value.value;
-      console.log("      @property ", key + ':', value, type);  
-      }
-    }
-  };
-
-  const propertyVisitor = {
-    ObjectProperty(path) {
-      // console.info('    *************** oe: ', path.node);
-      var prop = path.node;
-      
-          // path.node.value.properties.forEach( function(prop) {
-
-            if(t.isIdentifier(prop.value)) {
-              console.info('           ', prop.key.name + ': ' + prop.value.name);
-            } else if(t.isStringLiteral(prop.value)) {
-              console.info('           ', prop.key.name + ': \'' + prop.value.value + '\'');
-            } else if(t.isBooleanLiteral(prop.value)) {
-              console.info('           ', prop.key.name + ': ' + prop.value.value);
-            } else {
-              console.info('           ', prop.key.name + ': ' + prop.value.value, prop.value.type);
-            }
-          // });
-    }
-  }; */
-
-  
-
-  const polymerVisitor = {
-    // ObjectProperty(path) {
-    //   var node = path.node,
-    //     key = node.key.name,
-    //     type = node.value.type,
-    //     value = node.value.value;
-    //   switch(key) {
-    //   case 'is':
-    //     console.log('  class ' + toUpperCamel(value) + ' extends polymer.Base {');
-    //     break;
-    //   case 'properties':
-    //     // console.log("  @property()" + key);
-    //     // console.log("   ...", value, type);  
-    //     path.traverse(propertiesVisitor);
-    //     break;
-    //   default:
-    //     console.log("  " + key + ':', value, type);  
-    //   }
-    // },
-    FunctionExpression(path) {
-      var name = path.scope.parentBlock.key.name;
-      console.log("  Visiting FunctionExpression: ", name);
-      if(name == 'factoryImpl') {
-        // TODO: use 'constructor' instead of 'factoryImpl', use the same params
-        logPath(path.node.params.forEach( (param) => {
-          console.info('     param: ', param.name);
-        }));
-      } else if (observers[name]) {
-        console.info('this is an observer:', observers[name]);
-      } else if (listeners[name]) {
-        console.info('this is a listener:', listeners[name]);
-      }
-
-
-      // logPath(path.scope.parentBlock);
-    },
-
-    MemberExpression(path) {
-      // console.log("  Visiting MemberExpression: ", path.type, path.node.name);
-    },
-
-    Identifier(path) {
-        // console.log("  Visiting: ", path.type, path.node.name);
-      //  console.info('path:', path.node);
-        if (path.isReferencedIdentifier()) {
-          // ...
-        }
-      }
-  };
-
   function parsePolymerFunctionSignatureProperties(elements: {value: string}[]) {
     return elements.reduce( (results: any, signature: {value: string}) => {
       results[signature.value.match(/([^\(]+).*/)[1]] = signature.value;
@@ -170,11 +59,7 @@ MyGreeting.register();
     }, {});
   }
 
-  function parsePolymerProperties(properties: {key: {name: string}, value: any}[]) /*: ClassProperty[] */ {
-    return properties.map(parseProperty);
-  }
-
-  function parseProperty(property) {
+  function parsePolymerProperty(property) /*: ClassProperty */ {
     let name: string = property.key.name,
         attributes = property.value.properties,
         type, value, isFunction, params, readonly = false, decoratorProps = [];
@@ -195,7 +80,7 @@ MyGreeting.register();
       case 'value':
         // Default value for the property
         value = attribute.value;
-        if(attribute.value.type == 'FunctionExpression') {
+        if(t.isFunctionExpression(attribute.value)) {
           isFunction = true;
           params = [];
         }
@@ -233,24 +118,6 @@ MyGreeting.register();
           )
         )];
 
-
-/*    // let decorator   = '    @property({ ' + decorators.join(', ') + ' })';
-    let declaration = '    public ';
-    // if (readonly) {
-    //   declaration += 'get ' + name + '()';
-    // } else {
-      declaration += name;
-    // }
-    // if(type !== undefined) {
-    //   declaration += ': ' + type.toLowerCase()
-    // }
-    if(value !== undefined) {
-      declaration += ' = ' + value;
-    }
-    declaration += ';'*/
-
-    // return decorator + '\n' + declaration + '\n';
-
     if(isFunction) {
       // value is FunctionExpression
 // TODO: add to postConstruct      
@@ -270,6 +137,10 @@ MyGreeting.register();
     return result;
   }
 
+  function parsePolymerBehavior(useBehaviorDecorator, node) {
+    return useBehaviorDecorator ? createDecorator('behavior', node.name) : node.name;
+  }
+
   function parseNonPolymerFunction(node) {
     let name = node.key.name,
       params = node.value.params,
@@ -285,7 +156,7 @@ MyGreeting.register();
     visitor: {
 // TODO: insert '/// <reference path="../bower_components/polymer-ts/polymer-ts.d.ts" />'
 
-      CallExpression(path) {
+      CallExpression(path, state) {
         // For some reason we visit each identifier twice        
         if(path.node.callee.start != start) {
           start = path.node.callee.start;
@@ -302,7 +173,8 @@ MyGreeting.register();
           // path.requeue
 
           if(path.node.callee.name == 'Polymer') {
-            let elementName, className, extend,
+            let elementName, className, 
+                extend, behaviors, hostAttributes,
                 properties /*: Array<ClassProperty> */ = [],
                 constructor,
                 functions /*: Array<ClassMethod>*/ = [];
@@ -321,11 +193,14 @@ MyGreeting.register();
               case 'extends':
                 extend = value;
                 break;
+              case 'behaviors':
+                behaviors = config.value.elements.map(parsePolymerBehavior.bind(undefined, state.opts.useBehaviorDecorator));
+                break;
               case 'properties':
-                properties = parsePolymerProperties(config.value.properties);
-                // config.value.properties.forEach(function(property) {
-                //   properties += parseProperty(<string> property.key.name, property.value.properties);
-                // });
+                properties = config.value.properties.map(parsePolymerProperty);
+                break;
+              case 'hostAttributes':
+                hostAttributes = config.value;
                 break;
               case 'observers':
                 observers = parsePolymerFunctionSignatureProperties(config.value.elements);
@@ -334,31 +209,21 @@ MyGreeting.register();
                 listeners = parsePolymerFunctionSignatureProperties(config.value.elements);
                 break;
               default:
-                // console.log("  " + key + ':', value, type);  
-                let method = parseNonPolymerFunction(config);
-                if(method.key.name == 'factoryImpl') {
-                  method.key.name = method.kind = 'constructor';
-                  constructor = method;
+                if(t.isFunctionExpression(config.value)) {
+                  let method = parseNonPolymerFunction(config);
+                  if(method.key.name == 'factoryImpl') {
+                    method.key.name = method.kind = 'constructor';
+                    constructor = method;
+                  } else {
+                    functions.push(method);
+                  }
                 } else {
-                  functions.push(method);
+                  console.warn("Unexpected property:", key + ':', value, type);  
                 }
               }
               // TODO: skip = true; // don't add the standard Polymer properties to the polymer-ts class
             });
 
-            path.traverse(polymerVisitor);
-
-            var replacement =''; // '@component(\'' + elementName + '\')\n';
-            if(extend) {
-              // replacement += '@extend(\'' + extend + '\')\n';
-            }
-            replacement += 'class ' + className + ' extends polymer.Base {';
-            // replacement += properties;
-            replacement += '}';
-            // replacement += className + '.register();';
-            // console.info(replacement);
-
-            console.info('console.info(path.node.replaceWithSourceString);......');
             // console.info(path.replaceWithSourceString);
             //path.replaceWith(t.identifier('dude'));
             // path.replaceWith(t.debuggerStatement());
@@ -372,11 +237,16 @@ MyGreeting.register();
             if(extend) {
               decorators.push(createDecorator('extend', extend));
             }
+            if(hostAttributes) {
+              decorators.push(createDecorator('hostAttributes', hostAttributes));
+            }
+            if(behaviors && state.opts.useBehaviorDecorator) {
+              decorators = decorators.concat(behaviors);
+            }
 
-
+            // Add any postConstructorSetters (Polymer properties with a function for `value`)
             let constuctorBody /*: Array<Statement>*/ = constructor ? constructor.body.body : [];
 
-            //postConstuctSetters.forEach( (postConstuctSetter) => {
             for(var key in postConstuctSetters) {
               let postConstuctSetter /*: BlockStatement | Expression */ = postConstuctSetters[key];
               constuctorBody.push(t.expressionStatement(
@@ -395,63 +265,29 @@ MyGreeting.register();
               properties.push(constructor || t.classMethod('constructor', t.identifier('constructor'), [], t.blockStatement(constuctorBody)));
             }
 
-            path.parentPath.replaceWith(t.classDeclaration(
-                                                // id: Identifier
+            // Write out the TypeScript code
+            let classDeclaration = t.classDeclaration(
+                                            t.identifier(className),
+                                            t.memberExpression(t.identifier('polymer'), t.identifier('Base')
+                                          ),
+                                          t.classBody(properties.concat(functions)),
+                                          decorators);
+            if(behaviors && !state.opts.useBehaviorDecorator) {
+              classDeclaration.implements = behaviors.map( (behavior) => {
+                return t.classImplements(t.identifier(behavior));
+              });
+            }
+            path.parentPath.replaceWith(classDeclaration);
+
+            path.parentPath.insertAfter(t.expressionStatement(
+                                            t.callExpression(
+                                              t.memberExpression(
                                                 t.identifier(className),
-                                                // superClass?: Expression
-                                                t.memberExpression(
-                                                  t.identifier('polymer'),
-                                                  t.identifier('Base')
-                                                ),
-                                                // body: ClassBody
-                                                t.classBody(properties.concat(functions)),
-                                                /*t.classBody([
-                                                  // Array.<ClassMethod|ClassProperty
-                                                  t.ClassProperty(
-                                                    t.identifier('key'),
-                                                    t.stringLiteral('value'),
-                                                    // typeAnnotation
-                                                    t.typeAnnotation(t.stringTypeAnnotation()),
-                                                    // decorators
-                                                    [
-                                                      t.decorator(
-                                                        t.callExpression(
-                                                          t.identifier('property'),
-                                                          [t.objectExpression([
-                                                            t.objectProperty(
-                                                              t.identifier('type'),
-                                                              t.identifier('String')
-                                                            )
-                                                          ])]
-                                                        )
-                                                      )
-                                                    ]
-                                                  )
-                                                ]),*/
-                                                // decorators: Array.<Decorator>
-                                                decorators
-                              ));
-            // path.replaceWith(t.classExpression(t.identifier('ClassExpression')));
-
-
-            // path.replaceWith(t.classDeclaration({id: t.identifier('FooClass')});
-            // path.replaceWith(t.functionExpression(t.identifier('asdf'), [], []) );
-            // path.replaceWith(t.objectExpression([t.objectMethod('method', 
-            //                                     t.identifier('asdf'), 
-            //                                     t.blockStatement([t.expressionStatement(t.stringLiteral('my object method'))]))]));
-
-            // path.parentPath.insertAfter(t.expressionStatement(className + '.register();'));
-            //path.replacemenWith(t.functionDeclaration([t.identifier(id:'foo')]));
-            //path.replaceWith(t.blockStatement([t.expressionStatement('dude')]));
-
-
-            // console.info(path.node.replaceWithSourceString);
-            // console.info(path.node.callee.replaceWithSourceString);
-            // path.node.callee.replaceWithSourceString(replacement);
-            //path.replaceWithSourceString(replacement);
-            //path.replaceWith(t.expressionStatement(t.stringLiteral((replacement))));
-            // path.replaceWith(t.toExpression('class ' + className + ' extends polymer.Base {}'));
-            //path.replaceWith(t.decorator(t.expressionStatement('component(\'' + elementName + '\')')));
+                                                t.identifier('register')
+                                              ),
+                                              []
+                                            )
+                                        ));
           }
         }
       }
@@ -460,48 +296,13 @@ MyGreeting.register();
 }
 
 function logPath(path) {
-    for(var propName in path) {
-      if(path.hasOwnProperty(propName) 
-        && propName != 'parentPath' && propName != 'parent' 
-        && propName != 'hub'
-        && propName != 'container') {
-        console.log(propName, path[propName]);
-        //console.log(propName);
-      }
+  for(var propName in path) {
+    if(path.hasOwnProperty(propName) 
+      && propName != 'parentPath' && propName != 'parent' 
+      && propName != 'hub'
+      && propName != 'container') {
+      console.log(propName, path[propName]);
+      //console.log(propName);
     }
   }
-
-/*
-Polymer({
-  is: 'my-greeting',
-
-  properties: {
-    greeting: {
-      type: String,
-      value: 'Welcome!',
-      notify: true
-    }
-  }
-});
-
-@component('my-greeting')
-class MyGreeting extends polymer.Base {
-   @property({ type: String, notify: true })
-   greeting: string = 'Welcome!';
 }
-MyGreeting.register();
-*/
-
-/*
-module.exports = function (file, options, cb) {
-  var source = file.buffer.toString();
-  options = _.extend({filename: file.path}, options);
-  try {
-  	console.info('transforming for typescript-ts...');
-    source = 'DUDE'; // babel.transform(source, options).code + '\n';
-  } catch (er) {
-    if (er.codeFrame) er.message += '\n' + er.codeFrame;
-    return cb(er);
-  }
-  cb(null, {buffer: new Buffer(source)});
-};*/

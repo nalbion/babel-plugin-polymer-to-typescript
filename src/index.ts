@@ -1,45 +1,19 @@
-export default function({ types: t }) {
-	console.info('transforming for typescript-ts...');
+/// <reference path="node.d.ts" />
+import fs = require('fs');
 
-  var start = -1,
+export default function({ types: t }) {
+	var start = -1,
       observers = {},
       listeners = {},
       postConstuctSetters = {};
-
-  // plugin options get passed into plugin visitors through the `state` variable
-
-/*
-Polymer({
-  is: 'my-greeting',
-
-  properties: {
-    greeting: {
-      type: String,
-      value: 'Welcome!',
-      notify: true
-    }
-  }
-});
-
-@component('my-greeting')
-class MyGreeting extends polymer.Base {
-   @property({ type: String, notify: true })
-   greeting: string = 'Welcome!';
-}
-MyGreeting.register();
-*/
 
   function toUpperCamel(str: string){
     return str.replace(/^[a-z]|(\-[a-z])/g, function($1){return $1.toUpperCase().replace('-','');});
   }
 
   function createDecorator(name: string, value) {
-    // if(typeof value == 'string') {
       return t.decorator(t.callExpression(t.identifier(name), 
               [typeof value == 'string' ? t.stringLiteral(value) : value]));
-    // } else {
-    //   return t.decorator(t.callExpression(t.identifier(name), [t.stringLiteral(value)]));
-    // }
   }
 
   function createDecoratorProperty(key: string, value: string) {
@@ -70,11 +44,7 @@ MyGreeting.register();
       switch(attr_name) {
       case 'type':
         // one of Boolean, Date, Number, String, Array or Object
-        // type = attribute.value.value;
-//        type = attribute.value; 
-//TODO - something like this?...
         type = t.createTypeAnnotationBasedOnTypeof(attribute.value.name.toLowerCase());
-        // type = t.typeAnnotation(t.stringTypeAnnotation()),
         decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.name));
         break;
       case 'value':
@@ -119,14 +89,6 @@ MyGreeting.register();
         )];
 
     if(isFunction) {
-      // value is FunctionExpression
-// TODO: add to postConstruct      
-      // let body /*: Array<Statement> */ = value.body.body,
-      //     params = value.params,
-      //     directives /*: Array<Directive> */ = []; //t.directive(t.directiveLiteral('asdfasfd'))];
-      // body = t.blockStatement(body, directives);
-      // // kind, key, params, body, computed, static
-      // return t.ClassMethod('method', t.identifier(name), params, body); //, t.typeAnnotation(type), decorators) :
       postConstuctSetters[name] = value.body.body;
       var result = t.ClassProperty(t.identifier(name), undefined, t.typeAnnotation(type), decorators);
     } else {
@@ -154,23 +116,10 @@ MyGreeting.register();
 
   return {
     visitor: {
-// TODO: insert '/// <reference path="../bower_components/polymer-ts/polymer-ts.d.ts" />'
-
-      CallExpression(path, state) {
+      CallExpression(path, state) {        
         // For some reason we visit each identifier twice        
         if(path.node.callee.start != start) {
           start = path.node.callee.start;
-
-          // path.container.leadingComments: Array.<CommentBlock | CommentLine>
-          // path.addComment/s(), 
-          // path.assertXxxx()
-          // path.find/Parent()
-          // path.get(key: string, context?: boolean|TraversalContext)
-          // path.getAncestry()   getData()     getFunctionParent()   
-          // getSibling(key)  getStatementParent()  getTypeAnnotation()
-          // path.insertAfter/Before(nodes)    replaceInline  replaceWith/Multiple/SourceString
-          // path.isXxxx()
-          // path.requeue
 
           if(path.node.callee.name == 'Polymer') {
             let elementName, className, 
@@ -179,9 +128,7 @@ MyGreeting.register();
                 constructor,
                 functions /*: Array<ClassMethod>*/ = [];
             
-            // console.info('Polymer element config:', path.node.arguments[0].properties);
             path.node.arguments[0].properties.forEach(function(config) {
-              // console.info(config);
               var key = config.key.name,
                 type = config.value.type,
                 value = config.value.value;
@@ -189,6 +136,7 @@ MyGreeting.register();
               case 'is':
                 elementName = value;
                 className = toUpperCamel(value);
+                console.info('Parsing Polymer element', elementName, 'in', state.file.opts.filename);
                 break;
               case 'extends':
                 extend = value;
@@ -221,18 +169,8 @@ MyGreeting.register();
                   console.warn("Unexpected property:", key + ':', value, type);  
                 }
               }
-              // TODO: skip = true; // don't add the standard Polymer properties to the polymer-ts class
             });
 
-            // console.info(path.replaceWithSourceString);
-            //path.replaceWith(t.identifier('dude'));
-            // path.replaceWith(t.debuggerStatement());
-            // path.parentPath.replaceWithSourceString('class Foo { bar() {console.info();} }');
-            // path.parentPath.replaceWithSourceString(replacement);
-            // path.parentPath.insertBefore(t.expressionStatement(t.stringLiteral("Because I'm easy come, easy go.")));
-
-            // path.parentPath.remove();
-            //path.insertAfter(t.classDeclaration(
             let decorators = [ createDecorator('component', elementName) ];
             if(extend) {
               decorators.push(createDecorator('extend', extend));
@@ -264,14 +202,36 @@ MyGreeting.register();
             if(constuctorBody.length) {
               properties.push(constructor || t.classMethod('constructor', t.identifier('constructor'), [], t.blockStatement(constuctorBody)));
             }
-
+            
+            // Find the file's relative path to bower_components
+            var filePath = state.file.opts.filename, dots = '';
+            while(filePath) {
+              filePath = filePath.match(/(.*)\/.*/);
+              filePath = filePath && filePath[1];
+              if(filePath) {
+                try {
+                  if(fs.accessSync) {
+                    fs.accessSync(filePath + '/bower_components', fs.F_OK);
+                  } else {
+                    fs.lstatSync(filePath + '/bower_components');
+                  }
+                  break;
+                } catch (e) {
+                  dots += '../';
+                }
+              }
+            }
+            
             // Write out the TypeScript code
+            path.parentPath.parentPath.addComment('leading', '/ <reference path="' + dots + 'bower_components/polymer-ts/polymer-ts.d.ts"/>', true);
+
             let classDeclaration = t.classDeclaration(
                                             t.identifier(className),
                                             t.memberExpression(t.identifier('polymer'), t.identifier('Base')
                                           ),
                                           t.classBody(properties.concat(functions)),
                                           decorators);
+
             if(behaviors && !state.opts.useBehaviorDecorator) {
               classDeclaration.implements = behaviors.map( (behavior) => {
                 return t.classImplements(t.identifier(behavior));
@@ -302,7 +262,6 @@ function logPath(path) {
       && propName != 'hub'
       && propName != 'container') {
       console.log(propName, path[propName]);
-      //console.log(propName);
     }
   }
 }

@@ -17,6 +17,7 @@ Babel transformer to convert standard Polymer 1.x projects to [polymer-ts](https
     	"gulp-crisper": "^1.0.0",
 		"gulp-if": "^2.0.0",
 		"gulp-load-plugins": "^1.1.0",
+		"gulp-rename": "^1.2.2",
 		"gulp-replace": "^0.5.4",
 		"babel-plugin-polymer-to-typescript": "^0.0.2",
 	}
@@ -33,12 +34,13 @@ gulp.task('polymer-to-typescript', function() {
   return gulp.src('app/elements/**/*.html')
     .pipe($.crisper({scriptInHead: false}))
     .pipe($.if('*.html', $.replace(/^<html><head>|<\/head><body>|<\/body><\/html>/g, '')))
-    .pipe($.if('*.js', $.babel({
-      "plugins": ["polymer-to-typescript", {
+    .pipe($.if('*.html', 
+      $.replace(/^<html><head>|<\/head><body>|<\/body><\/html>/g, ''),
+      $.babel({"plugins": ["polymer-to-typescript", {
 		  "useBehaviorDecorator": true
-      	}
-      }]
-    })))
+      	}]})
+    ))
+    .pipe($.if('*.js', $.rename({extname: '.ts'})))
     .pipe(gulp.dest('dist'));
 });
 ```

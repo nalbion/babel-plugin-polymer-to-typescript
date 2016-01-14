@@ -26,6 +26,26 @@ export default function({ types: t }) {
     );
   }
 
+  /** @param type - one of Boolean, Date, Number, String, Array or Object */
+  function createTypeAnnotation(type: string) {
+    switch(type) {
+    case 'String':
+      return t.typeAnnotation(t.stringTypeAnnotation());
+    case 'Boolean':
+      // return t.typeAnnotation(t.booleanTypeAnnotation());
+      return t.typeAnnotation(t.genericTypeAnnotation(t.identifier('boolean')));
+    case 'Date':
+      return t.typeAnnotation(t.dateTypeAnnotation());
+    case 'Number':
+      return t.typeAnnotation(t.numberTypeAnnotation());
+    case 'Array':
+      return t.typeAnnotation(t.arrayTypeAnnotation());
+    case 'Object':
+    default:
+      return t.typeAnnotation(t.genericTypeAnnotation(t.identifier(type)));
+    }
+  }
+
   function parsePolymerFunctionSignatureProperties(elements: {value: string}[]) {
     return elements.reduce( (results: any, signature: {value: string}) => {
       let match = signature.value.match(/([^\(]+)\(([^\)]+)/),
@@ -41,33 +61,43 @@ export default function({ types: t }) {
       let eventName = property.key.value,
           functionName = property.value.value,
           functionEvents = results[functionName];
-
       if(!functionEvents) {
         functionEvents = results[functionName] = [];
       }
-
       functionEvents.push(createDecorator('listen', eventName));
       return results;
     }, {});
   }
+
+  function parsePolymerBehavior(useBehaviorDecorator, node) {
+    return useBehaviorDecorator ? createDecorator('behavior', node) : node;
+  }
+
+  function parseNonPolymerFunction(node) {
+    let name = node.key.name,
+      params = node.value.params,
+      body /*: Array<Statement */ = node.value.body.body;
+
+    let method = t.classMethod('method', t.identifier(name), params, t.blockStatement(body));
+    method.leadingComments = node.leadingComments;
+    return method;
+  }
+
 
   function parsePolymerProperty(property) /*: ClassProperty */ {
     let name: string = property.key.name,
         attributes = property.value.properties,
         type, value, isFunction, params, readonly = false, decoratorProps = [];
 
-    // console.info('!!!!!!  parsing property', name, attributes);
     if(t.isIdentifier(property.value)) {
-      console.info('property.value:', property.value);
-      type = t.typeAnnotation(property.value.name);
+      type = createTypeAnnotation(property.value.name);
     } else {
       attributes.forEach( (attribute) => {  
         let attr_name: string = attribute.key.name;
-
         switch(attr_name) {
         case 'type':
           // one of Boolean, Date, Number, String, Array or Object
-          type = t.createTypeAnnotationBasedOnTypeof(attribute.value.name.toLowerCase());
+          type = createTypeAnnotation(attribute.value.name);
           decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.name));
           break;
         case 'value':
@@ -79,15 +109,9 @@ export default function({ types: t }) {
           }
           if(type === undefined) {
             type = t.createTypeAnnotationBasedOnTypeof(value);
-  //           if(t.isStringLiteral(attribute.value)) {
-  // // TODO: select proper type
-  //             type = t.typeAnnotation(t.stringTypeAnnotation());
-  //           } else if(t.isBooleanLiteral(attribute.value)) {
-  //             type = t.typeAnnotation(t.booleanTypeAnnotation());
-  //           }
           }
           break;
-        case 'readonly':
+        case 'readOnly':
           readonly = true;
           // fall-through
         case 'reflectToAttribute':
@@ -100,7 +124,7 @@ export default function({ types: t }) {
           decoratorProps.push(createDecoratorProperty(attr_name, '\'' + attribute.value.value + '\''));
           break;
         default:
-          console.warn('Unexpected property attribute: ', attribute);
+          console.warn('Unexpected property attribute: ', attribute.key.name, 'at line', attribute.loc.start.line);
           decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.value));
         }
       });
@@ -115,29 +139,14 @@ export default function({ types: t }) {
 
     if(isFunction) {
       postConstuctSetters[name] = value.body.body;
-      var result = t.ClassProperty(t.identifier(name), undefined, t.typeAnnotation(type), decorators);
+      var result = t.ClassProperty(t.identifier(name), undefined, type, decorators);
     } else {
-      var result = t.ClassProperty(t.identifier(name), value, t.typeAnnotation(type), decorators);
+      var result = t.ClassProperty(t.identifier(name), value, type, decorators);
     }
 
     result.leadingComments = property.leadingComments;
     return result;
   }
-
-  function parsePolymerBehavior(useBehaviorDecorator, node) {
-    return useBehaviorDecorator ? createDecorator('behavior', node.name) : node.name;
-  }
-
-  function parseNonPolymerFunction(node) {
-    let name = node.key.name,
-      params = node.value.params,
-      body /*: Array<Statement */ = node.value.body.body;
-
-    let method = t.classMethod('method', t.identifier(name), params, t.blockStatement(body));
-    method.leadingComments = node.leadingComments;
-    return method;
-  }
-
 
   return {
     visitor: {
@@ -206,8 +215,10 @@ export default function({ types: t }) {
                     }
                     functions.push(method);
                   }
+                } else if (t.isObjectExpression) {
+                  properties.push(t.classProperty(t.identifier(key), config.value));
                 } else {
-                  console.warn("Unexpected property:", key + ':', value, type);  
+                  console.warn("!!!!!!!!!!! Unexpected property:", key + ':', value, type);
                 }
               }
             });
@@ -243,7 +254,7 @@ export default function({ types: t }) {
             if(constuctorBody.length) {
               properties.push(constructor || t.classMethod('constructor', t.identifier('constructor'), [], t.blockStatement(constuctorBody)));
             }
-            
+
             // Find the file's relative path to bower_components
             var filePath = state.file.opts.filename, dots = '';
             while(filePath) {
@@ -274,8 +285,8 @@ export default function({ types: t }) {
                                           decorators);
 
             if(behaviors && !state.opts.useBehaviorDecorator) {
-              classDeclaration.implements = behaviors.map( (behavior) => {
-                return t.classImplements(t.identifier(behavior));
+              classDeclaration.implements = behaviors.map( (behavior) => {      
+                return t.classImplements(behavior);
               });
             }
             path.parentPath.replaceWith(classDeclaration);

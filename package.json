@@ -30,11 +30,13 @@
     "gulp-babel": "^6.1.1",
     "gulp-newer": "^1.1.0",
     "gulp-plumber": "^1.0.1",
+    "gulp-sourcemaps": "^1.6.0",
     "gulp-typescript": "^2.10.0",
     "gulp-util": "^3.0.7",
     "gulp-watch": "^4.3.5",
     "through2": "^2.0.0"
   },
   "dependencies": {
+    "source-map-support": "^0.4.0"
   }
 }

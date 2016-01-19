@@ -7,6 +7,7 @@ var gutil   = require("gulp-util");
 var gulp    = require("gulp");
 var del     = require('del');
 var ts      = require('gulp-typescript');
+var sourcemaps = require('gulp-sourcemaps');
 var watch   = require('gulp-watch');
 
 var scripts = ['src/**/*.ts'];
@@ -19,16 +20,17 @@ gulp.task("clean", function(cb) {
 });
 
 gulp.task("build", function () {
-  return gulp.src(scripts)
+  var tsResult = gulp.src(scripts)
     .pipe(plumber({
       errorHandler: function (err) {
         gutil.log(err.stack);
       }
     }))
+    .pipe(sourcemaps.init())
     .pipe(ts({
       target: 'es5',
       module: 'CommonJS'
-    }))
+    }));
     // .pipe(through.obj(function (file, enc, callback) {
     //   file._path = file.path;
     //   file.path = file.path.replace(srcEx, libFragment);
@@ -40,7 +42,11 @@ gulp.task("build", function () {
     //   callback(null, file);
     // }))
     // .pipe(babel())
-    .pipe(gulp.dest(dest));
+    //.pipe(gulp.dest(dest));
+
+    return tsResult.js
+                .pipe(sourcemaps.write()) // Now the sourcemaps are added to the .js file
+                .pipe(gulp.dest(dest));
 });
 
 gulp.task("watch", ["build"], function (callback) {

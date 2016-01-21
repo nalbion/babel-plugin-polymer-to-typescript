@@ -1,6 +1,6 @@
 {
   "name": "babel-plugin-polymer-to-typescript",
-  "version": "0.1.22",
+  "version": "0.1.2333",
   "author": "Nicholas Albion",
   "license": "ISC",
   "description": "Babel transformer to convert standard Polymer 1.x projects to polymer-ts style",

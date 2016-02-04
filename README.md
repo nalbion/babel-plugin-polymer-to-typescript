@@ -1,5 +1,6 @@
 Babel transformer to convert standard Polymer 1.x projects to [polymer-ts](https://github.com/nippur72/PolymerTS) style.
 
+This is still in development.  I've had better luck in generating `.d.ts` files using ([my fork](https://github.com/nalbion/generator-polymerts/tree/develop)) of [generator-polymerts](https://github.com/bsorrentino/generator-polymerts) - the output is available at [polymer-elements-typings](https://github.com/nalbion/polymer-elements-typings).
 
 ## Options
 

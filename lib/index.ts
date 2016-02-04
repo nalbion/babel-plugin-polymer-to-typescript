@@ -106,8 +106,8 @@ export default function({ types: t }) {
     let method = t.classMethod('method', t.identifier(name), params, t.blockStatement(body));
 
     // Attempt to guess the types from parameter names
-    if (node.value.params) {
-      node.value.params.forEach( (param) => {
+    if (params) {
+      params.forEach( (param) => {
         let type = null;
 
         param.optional = !!param.name.match(/^opt/);
@@ -141,7 +141,7 @@ export default function({ types: t }) {
               param = match[3];
 
           if (!!match[2]) {
-            node.value.params[i].optional = true;
+            params[i].optional = true;
           }
 
           // remove 'undefined'
@@ -154,10 +154,10 @@ export default function({ types: t }) {
             }
           }
 
-          if (node.value.params[i].name == param) {
-            node.value.params[i].typeAnnotation = createTypeAnnotation(type);
+          if (params[i] && params[i].name == param) {
+            params[i].typeAnnotation = createTypeAnnotation(type);
           } else {
-            console.warn('param', i, '(' + node.value.params[i] + ') !=', param);
+            console.warn('param', i, '(' + params[i] + ') !=', param);
           }
         }
       }
@@ -234,6 +234,13 @@ export default function({ types: t }) {
             [t.objectExpression(decoratorProps)]
           )
         )];
+
+    if (property.leadingComments) {
+      let match = property.leadingComments[0].value.match(/@type {(?!hydrolysis)([^}]+)}/);
+      if (match) {
+        type = createTypeAnnotation(match[1]);
+      }
+    }
 
     if(isFunction) {
       postConstuctSetters[name] = value.body.body;

@@ -43,19 +43,19 @@ export default function({ types: t }) {
 
   /** @param type - one of Boolean, Date, Number, String, Array or Object */
   function createTypeAnnotation(type: string, elementType = 'any') {
-    switch(type) {
-    case 'String':
+    switch(type.toLowerCase()) {
+    case 'string':
       return t.typeAnnotation(t.stringTypeAnnotation());
-    case 'Boolean':
+    case 'boolean':
       // return t.typeAnnotation(t.booleanTypeAnnotation());
       return t.typeAnnotation(t.genericTypeAnnotation(t.identifier('boolean')));
-    case 'Date':
+    case 'date':
       return t.typeAnnotation(t.dateTypeAnnotation());
-    case 'Number':
+    case 'number':
       return t.typeAnnotation(t.numberTypeAnnotation());
-    case 'Array':
+    case 'array':
       return t.typeAnnotation(t.arrayTypeAnnotation(t.identifier(elementType)));
-    case 'Object':
+    case 'object':
     default:
 //console.info('TTTTTTTTTTTTTTTTTTTTTTTTTTTTt type:', type);    
       return t.typeAnnotation(t.genericTypeAnnotation(t.identifier(type)));
@@ -104,7 +104,67 @@ export default function({ types: t }) {
       body /*: Array<Statement */ = node.value.body.body;
 
     let method = t.classMethod('method', t.identifier(name), params, t.blockStatement(body));
-    method.leadingComments = node.leadingComments;
+
+    // Attempt to guess the types from parameter names
+    if (node.value.params) {
+      node.value.params.forEach( (param) => {
+        let type = null;
+
+        param.optional = !!param.name.match(/^opt/);
+
+        switch(param.name) {
+        case 'el':
+          type = 'HTMLElement'; break;
+        case 'event':
+          type = 'Event'; break;
+        default:
+          if (name.match(/Element$/)) {
+            type = 'HTMLElement';
+          }
+        }
+
+        if (type) {
+          param.typeAnnotation = createTypeAnnotation(type);
+        }
+      });
+    }
+
+    // Some functions have JSDoc annotations
+    // https://developers.google.com/closure/compiler/docs/js-for-compiler#types
+    if (node.leadingComments) {
+      let typedParams = node.leadingComments[0].value.match(/@param {[^}]+} \S+/g);
+      if (typedParams) {
+        for (let i = 0; i < typedParams.length; i++) {
+          let typedParam = typedParams[i],
+              match = typedParam.match(/{!?([^=}]+)(=?)} (\S+)/),
+              type = match[1],
+              param = match[3];
+
+          if (!!match[2]) {
+            node.value.params[i].optional = true;
+          }
+
+          // remove 'undefined'
+          match = type.match(/(.*[^|])?\|?undefined\|?(.*)/);
+          if (match) {
+            if (match[1]) {
+              type = match[2] ? (match[1] + '|' + match[2]) : match[1];
+            } else {
+              type = match[2];
+            }
+          }
+
+          if (node.value.params[i].name == param) {
+            node.value.params[i].typeAnnotation = createTypeAnnotation(type);
+          } else {
+            console.warn('param', i, '(' + node.value.params[i] + ') !=', param);
+          }
+        }
+      }
+
+      method.leadingComments = node.leadingComments;
+    }
+
     return method;
   }
 
@@ -142,8 +202,6 @@ export default function({ types: t }) {
               // TODO: determine actual type
               type = t.typeAnnotation(t.genericTypeAnnotation(t.identifier('object')));
             } else if (t.isFunctionExpression(value)) {
-              // TODO: determine actual type
-//console.info('...it is a function!');              
               type = t.typeAnnotation(t.functionTypeAnnotation());
             } else {
               type = t.createTypeAnnotationBasedOnTypeof(value);
@@ -254,17 +312,15 @@ console.info('!!!!!!!!!!!!!!!!!!!!!!!!! failed to find path for', dtsFileName);
     // Write out the TypeScript code
     if(dtsFileName) {
       let dtsPath = getPathForPolymerFileName(filePath + '/bower_components/', dtsFileName);
-      path.parentPath.parentPath.addComment('leading', '/ <reference path="' + dots + 'typings/' + dtsPath + '/' + dtsFileName + '.d.ts"/>', true);
+      state.file.path.addComment('leading', '/ <reference path="' + dots + 'typings/' + dtsPath + '/' + dtsFileName + '.d.ts"/>', true);
     } else {
-      path.parentPath.parentPath.addComment('leading', '/ <reference path="' + dots + 'bower_components/polymer-ts/polymer-ts.d.ts"/>', true);
+      state.file.path.addComment('leading', '/ <reference path="' + dots + 'bower_components/polymer-ts/polymer-ts.d.ts"/>', true);
     }
   }
 
 /*
 TODO: 
 - need to export behavior classes
-- declare behavior as abstract
-- IntelliJ is happier if TSD declares multiple inheritance rather than `implements`
 - /// <reference path="../../bower_components/.....
 */
   /**
@@ -413,6 +469,7 @@ TODO:
     }
 
     if(memberExpression) {
+//TODO: export class, module on same line as Polymer
 //      let module = t.declareModule(t.identifier(memberExpression.object.name),
 //                                                  t.blockStatement([classDeclaration]));
       let module = t.blockStatement([classDeclaration]);
@@ -470,8 +527,22 @@ TODO:
         // For some reason we visit each identifier twice
         if(path.node.callee.start != start) {
           start = path.node.callee.start;
-          if(path.node.callee.name == 'Polymer') {
-            parsePolymerClass(path.node.arguments[0], path, state);
+
+          if (!path.node.callee.name && t.isFunctionExpression(path.node.callee)) {
+            // anonymous function - won't be able to generate .d.ts
+            var bodyNodes = path.node.callee.body.body;
+            path.replaceWith(bodyNodes[0]);
+            for (let i = 1; i < bodyNodes.length; i++) {
+              path.parentPath.insertAfter(bodyNodes[i]);
+            }
+          } else if (path.node.callee.name == 'Polymer') {
+            let memberExpression = t.isAssignmentExpression(path.parent) &&
+                                    t.isMemberExpression(path.parent.left) ?
+                                    path.parent.left : undefined;
+                //module = path.parent.left.object.name;
+                // path.parent.left.property.name
+
+            parsePolymerClass(path.node.arguments[0], path, state, memberExpression);
           }
         }
       },
@@ -486,12 +557,13 @@ TODO:
 //console.info('2..................................', path.node.left);
 //console.info('3.............', path.node.right.type);
             if(t.isCallExpression(path.node.right)) {
-              if(path.node.right.callee.name == 'Polymer') {
-                parsePolymerClass(path.node.right.arguments[0], path, state); //, path.node.left);
-              } else if(t.isFunctionExpression(path.node.right.callee)) {
-                let expression = evaluateFunctionExpression(path.node.right.callee);                
-                parsePolymerClass(expression, path, state, path.node.left);
-              }
+console.info('.......... Call within assignment', state.file.opts.filename);
+              //if(path.node.right.callee.name == 'Polymer') {
+              //  parsePolymerClass(path.node.right.arguments[0], path, state); //, path.node.left);
+              //} else if(t.isFunctionExpression(path.node.right.callee)) {
+              //  let expression = evaluateFunctionExpression(path.node.right.callee);
+              //  parsePolymerClass(expression, path, state, path.node.left);
+              //}
             } else if(t.isObjectExpression(path.node.right)) {
               parsePolymerClass(path.node.right, path, state, path.node.left);
             } else if(t.isArrayExpression(path.node.right)) {

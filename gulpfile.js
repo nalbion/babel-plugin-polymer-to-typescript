@@ -10,13 +10,13 @@ var ts      = require('gulp-typescript');
 var sourcemaps = require('gulp-sourcemaps');
 var watch   = require('gulp-watch');
 
-var scripts = ['src/**/*.ts'];
+var scripts = ['lib/**/*.ts'];
 var dest = 'lib';
 
 gulp.task("default", ["build"]);
 
 gulp.task("clean", function(cb) {
-  del(['lib/**'], cb)
+  del(['lib/**/*.{js,d.ts,map}'], cb)
 });
 
 gulp.task("build", function () {
@@ -29,7 +29,10 @@ gulp.task("build", function () {
     .pipe(sourcemaps.init())
     .pipe(ts({
       target: 'es5',
-      module: 'CommonJS'
+      module: 'CommonJS',
+      compilerOptions: {
+        'experimentalDecorators': true
+      }
     }));
     // .pipe(through.obj(function (file, enc, callback) {
     //   file._path = file.path;

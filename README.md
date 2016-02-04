@@ -47,4 +47,6 @@ gulp.task('polymer-to-typescript', function() {
 
 ## Contributing
 
-PRs are welcome.  I found the [AST Explorer](http://astexplorer.net/) very useful to gain an understanding of the structure of the original code and the code to be generated.  Another good reference was the README for [babel-types](https://github.com/babel/babel/tree/master/packages/babel-types).
+PRs are welcome.  I found the [AST Explorer](http://astexplorer.net/) very useful to gain an understanding 
+of the structure of the original code and the code to be generated.  
+Another good reference was the README for [babel-types](https://github.com/babel/babel/tree/master/packages/babel-types).

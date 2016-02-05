@@ -42,7 +42,11 @@ export default function({ types: t }) {
   }
 
   /** @param type - one of Boolean, Date, Number, String, Array or Object */
-  function createTypeAnnotation(type: string, elementType = 'any') {
+  function createTypeAnnotation(type: string, name?: string, elementType = 'any') {
+    if (!type) {
+      console.info('!!!!!!!!!!!!!!!!!! no type for', name);
+      return;
+    }
     switch(type.toLowerCase()) {
     case 'string':
       return t.typeAnnotation(t.stringTypeAnnotation());
@@ -57,7 +61,12 @@ export default function({ types: t }) {
       return t.typeAnnotation(t.arrayTypeAnnotation(t.identifier(elementType)));
     case 'object':
     default:
-//console.info('TTTTTTTTTTTTTTTTTTTTTTTTTTTTt type:', type);    
+      if (name) {
+        let guessedType = guessTypeFromName(name);
+        if (guessedType) {
+          return createTypeAnnotation(guessedType);
+        }
+      }
       return t.typeAnnotation(t.genericTypeAnnotation(t.identifier(type)));
     }
   }
@@ -98,6 +107,34 @@ export default function({ types: t }) {
     return useBehaviorDecorator ? createDecorator('behavior', node) : node;
   }
 
+  function guessTypeFromName(name: string) {
+    var type;
+    if (name.match(/^(opt_)?is[A-Z]/)) {
+      type = 'boolean';
+    } else {
+      switch (name) {
+        case 'el':
+          type = 'HTMLElement';
+          break;
+        case 'event':
+          type = 'Event';
+          break;
+        case 'keyboardEvent':
+          type = 'KeyboardEvent';
+          break;
+        default:
+          if (name.match(/Element$/)) {
+            type = 'HTMLElement';
+          } else if (name.match(/(String|Name)$/)) {
+            type = 'string';
+          } else if (name.match(/EventTarget$/)) {
+            type = 'EventTarget';
+          }
+      }
+    }
+    return type;
+  }
+
   function parseNonPolymerFunction(node) {
     let name = node.key.name,
       params = node.value.params,
@@ -108,21 +145,9 @@ export default function({ types: t }) {
     // Attempt to guess the types from parameter names
     if (params) {
       params.forEach( (param) => {
-        let type = null;
-
         param.optional = !!param.name.match(/^opt/);
 
-        switch(param.name) {
-        case 'el':
-          type = 'HTMLElement'; break;
-        case 'event':
-          type = 'Event'; break;
-        default:
-          if (name.match(/Element$/)) {
-            type = 'HTMLElement';
-          }
-        }
-
+        let type = guessTypeFromName(param.name);
         if (type) {
           param.typeAnnotation = createTypeAnnotation(type);
         }
@@ -170,28 +195,24 @@ export default function({ types: t }) {
 
 
   function parsePolymerProperty(property) /*: ClassProperty */ {
-//console.info('############# parsePolymerProperty:', property)    ;
     let name: string = property.key.name,
         attributes = property.value.properties,
         type, value, isFunction, params, readonly = false, decoratorProps = [];
 
     if(t.isIdentifier(property.value)) {
-      type = createTypeAnnotation(property.value.name);
+      type = createTypeAnnotation(property.value.name, name);
     } else {
       attributes.forEach( (attribute) => {
-//console.info('   &&&&&&&&&&&&&&&& attribute:', attribute)        ;
         let attr_name: string = attribute.key.name;
         switch(attr_name) {
         case 'type':
           // one of Boolean, Date, Number, String, Array or Object
-          type = createTypeAnnotation(attribute.value.name);
-///console.info('->>>>>>>>>>>>> inferred type:', type);          
+          type = createTypeAnnotation(attribute.value.name, name);
           decoratorProps.push(createDecoratorProperty(attr_name, attribute.value.name));
           break;
         case 'value':
           // Default value for the property
           value = attribute.value;
-//console.info('->>>>>>>>>>>>>>>> inferred value:', value);          
           //decoratorProps.push(createDecoratorProperty(attr_name, attribute.value));
           if(t.isFunctionExpression(value)) {
             isFunction = true;
@@ -217,8 +238,7 @@ export default function({ types: t }) {
           break;
         case 'computed':
         case 'observer':
-          // computed function call (as string)
-// console.info('===========', attribute.value)          ;
+          // computed function call (as string)        ;
           decoratorProps.push(createDecoratorProperty(attr_name, '\'' + attribute.value.value + '\''));
           break;
         default:
@@ -238,7 +258,7 @@ export default function({ types: t }) {
     if (property.leadingComments) {
       let match = property.leadingComments[0].value.match(/@type {(?!hydrolysis)([^}]+)}/);
       if (match) {
-        type = createTypeAnnotation(match[1]);
+        type = createTypeAnnotation(match[1], name);
       }
     }
 
@@ -269,15 +289,12 @@ export default function({ types: t }) {
   function getPathForPolymerFileName(filePath: string, dtsFileName: string): string {
     dtsFileName = dtsFileName.replace(/-impl$/, '');
     var path = polymerPathsByFileName[dtsFileName];
-//console.info('....................looking for ' + dtsFileName, 'in', filePath);
 
     if(!path) {
-//console.info('11111111111111111111 ', filePath + '...' + dtsFileName + '/' + dtsFileName + '.html');      
       if(verifyPathExists(filePath + dtsFileName + '/' + dtsFileName + '.html')) {
         return dtsFileName;
       }
       path = dtsFileName.match(/[^-]+-[^-]+/)[0];
-//console.info('22222222222222222222 ', filePath + '...' + path + '/' + dtsFileName + '.html');      
       if(verifyPathExists(filePath + path + '/' + dtsFileName + '.html')) {
         return path;
       }
@@ -339,9 +356,7 @@ TODO:
                                               null,
                                               t.classBody([]),
                                               []);
-//console.info('-----------', arrayExpression)      ;
     classDeclaration.implements = arrayExpression.elements.map( (behavior) => {
-//console.info('-----------', behavior.property.name, memberExpression.property.name)      ;
       if(behavior.property.name != memberExpression.property.name + 'Impl') {
         addTypeDefinitionReference(path, state, toDashCase(behavior.property.name));
       }
@@ -354,8 +369,6 @@ TODO:
   }
 
   function parsePolymerClass(objectExpression, path, state, memberExpression?) {
-//console.info('===========================objectExpression:', objectExpression);    
-//console.info('---------------------------memberExpression:', memberExpression);
     let className, elementName,
                 extend, behaviors, hostAttributes,
                 properties /*: Array<ClassProperty> */ = [],
@@ -363,7 +376,6 @@ TODO:
                 functions /*: Array<ClassMethod>*/ = [];
 
     objectExpression.properties.forEach( (config) => {
- // console.info('------------------', config);
       switch(config.key.name) {
       case 'is':
         elementName = config.value.value;
@@ -500,10 +512,8 @@ TODO:
   function evaluateFunctionExpression(functionExpression) {
     var namedStatements = {},
       result;
-//console.info('-------------', functionExpression);
 
     functionExpression.body.body.forEach( (statement) => {
-//console.info('   ...', statement)      ;
       if (t.isReturnStatement(statement)) {
         result = statement.argument;        
       } else if (t.isFunctionDeclaration(statement)) {
@@ -530,7 +540,6 @@ TODO:
         listeners = {};
         postConstuctSetters = {};
 
-// console.info('0000000000000  ', path.node.callee.name);
         // For some reason we visit each identifier twice
         if(path.node.callee.start != start) {
           start = path.node.callee.start;
@@ -555,14 +564,10 @@ TODO:
       },
 
       AssignmentExpression(path, state) {
-//console.info('sadfffffffffffffffffffffffffff');
         if(t.isMemberExpression(path.node.left)) {
-//console.info('1............. path.node:', path.node);
           if(path.node.left.object.name == 'Polymer') {
             let className = path.node.left.object.name + '.' + path.node.left.property.name;
             console.info('Parsing Polymer behavior', className, 'in', state.file.opts.filename);
-//console.info('2..................................', path.node.left);
-//console.info('3.............', path.node.right.type);
             if(t.isCallExpression(path.node.right)) {
 console.info('.......... Call within assignment', state.file.opts.filename);
               //if(path.node.right.callee.name == 'Polymer') {

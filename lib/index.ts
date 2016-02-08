@@ -515,11 +515,19 @@ TODO:
         delete prop.body;
       });
       classDeclaration = t.interfaceDeclaration(t.identifier(className), null /*typeParameters*/,
-          [], t.classBody(properties.concat(functions)));
+          [], t.classBody(properties.concat(functions)
+                        .filter( (prop) => {
+                          let name = prop.key.value || prop.key.name;
+                          return name[0] != '_';
+                        })));
     } else {
       classDeclaration = t.classDeclaration(t.identifier(className),
           t.memberExpression(t.identifier('polymer'), t.identifier('Base')),
-          t.classBody(properties.concat(functions)),
+          t.classBody(properties.concat(functions)
+                        .filter( (prop) => {
+                          let name = prop.key.value || prop.key.name;
+                          return name[0] != '_';
+                        })),
           decorators);
     }
 

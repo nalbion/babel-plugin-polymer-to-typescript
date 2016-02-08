@@ -24,8 +24,6 @@ export default function({ types: t }) {
   }
 
   function createDecoratorProperty(key: string, value: string) {
-//console.info('----------------- createDecoratorProperty:', value)    ;
-//console.info('ttttttttttttttttt type:', typeof value);
     switch(typeof value) {
     case 'object':
       return t.objectProperty(
@@ -59,14 +57,25 @@ export default function({ types: t }) {
       return t.typeAnnotation(t.numberTypeAnnotation());
     case 'array':
       return t.typeAnnotation(t.arrayTypeAnnotation(t.identifier(elementType)));
+    case '*':
+      return t.typeAnnotation(t.anyTypeAnnotation());
     case 'object':
     default:
-      if (name) {
+      if (type.indexOf('function') == 0) {
+        type = type.replace(/^function\(/, '(');
+        if (type.indexOf(':') > 0) {
+          type = type.replace(/:/, ' => ');
+        } else {
+          type = type + ' => void';
+        }
+      } else if (name) {
         let guessedType = guessTypeFromName(name);
         if (guessedType) {
           return createTypeAnnotation(guessedType);
         }
       }
+
+
       return t.typeAnnotation(t.genericTypeAnnotation(t.identifier(type)));
     }
   }
@@ -161,28 +170,13 @@ export default function({ types: t }) {
       if (typedParams) {
         for (let i = 0; i < typedParams.length; i++) {
           let typedParam = typedParams[i],
-              match = typedParam.match(/{!?([^=}]+)(=?)} (\S+)/),
-              type = match[1],
-              param = match[3];
+              match = typedParam.match(/{[!\?]?([^=}]+)(=?)} (\S+)/),
+              paramName = match[3];
 
-          if (!!match[2]) {
-            params[i].optional = true;
-          }
-
-          // remove 'undefined'
-          match = type.match(/(.*[^|])?\|?undefined\|?(.*)/);
-          if (match) {
-            if (match[1]) {
-              type = match[2] ? (match[1] + '|' + match[2]) : match[1];
-            } else {
-              type = match[2];
-            }
-          }
-
-          if (params[i] && params[i].name == param) {
-            params[i].typeAnnotation = createTypeAnnotation(type);
+          if (params[i] && params[i].name == paramName) {
+            parseTypeFromComments(match, paramName, params[i]);
           } else {
-            console.warn('param', i, '(' + params[i] + ') !=', param);
+            console.warn('param', i, '(' + params[i] + ') !=', paramName);
           }
         }
       }
@@ -191,6 +185,21 @@ export default function({ types: t }) {
     }
 
     return method;
+  }
+
+  function parseTypeFromComments(match: RegExpMatchArray, paramName: string, result: any) {
+    if (!!match[2]) {
+      result.optional = true;
+    }
+
+    // remove 'undefined', 'null' and fix '<!'
+    let type = match[1].replace(/\b(undefined|null)\b/g, '')
+                      .replace(/\|{2,}/g, '|')
+                      .replace(/^\||\|$/g, '')
+                      .replace(/<!/, '<');
+
+    result.typeAnnotation = createTypeAnnotation(type);
+    return result;
   }
 
 
@@ -256,9 +265,13 @@ export default function({ types: t }) {
         )];
 
     if (property.leadingComments) {
-      let match = property.leadingComments[0].value.match(/@type {(?!hydrolysis)([^}]+)}/);
+      let match = property.leadingComments[0].value.match(/@type {[!\?]?(?!hydrolysis)([^=}]+)(=?)}/);
       if (match) {
-        type = createTypeAnnotation(match[1], name);
+        let typeResult = parseTypeFromComments(match, name, {});
+        type = typeResult.typeAnnotation;
+        if (typeResult.optional) {
+          //type.optional = true;
+        }
       }
     }
 
@@ -284,7 +297,9 @@ export default function({ types: t }) {
     'paper-button-behavior': 'paper-behaviors',
     'paper-checked-element-behavior': 'paper-behaviors',
     'paper-inky-focus-behavior': 'paper-behaviors',
-    'paper-ripple-behavior': 'paper-behaviors'
+    'paper-ripple-behavior': 'paper-behaviors',
+    'neon-animatable-behavior': 'neon-animation',
+    'neon-shared-element-animation-behavior': 'neon-animation'
   };
   function getPathForPolymerFileName(filePath: string, dtsFileName: string): string {
     dtsFileName = dtsFileName.replace(/-impl$/, '');
@@ -299,7 +314,12 @@ export default function({ types: t }) {
         return path;
       }
 
-console.info('!!!!!!!!!!!!!!!!!!!!!!!!! failed to find path for', dtsFileName);      
+      let behavior = dtsFileName.indexOf('-behavior');
+      if (behavior > 0 ) {
+        return getPathForPolymerFileName(filePath, dtsFileName.substring(0, behavior));
+      } else {
+        console.info('!!!!!!!!!!!!!!!!!!!!!!!!! failed to find path for', dtsFileName);
+      }
     }
 
     return path;
@@ -319,6 +339,9 @@ console.info('!!!!!!!!!!!!!!!!!!!!!!!!! failed to find path for', dtsFileName);
   }
 
   function addTypeDefinitionReference(path, state, dtsFileName?: string) {
+    // skip templatizer behavior, used by iron-list
+    if (dtsFileName && dtsFileName.indexOf('-') < 0) { return; }
+
     // Find the file's relative path to bower_components
     var filePath = state.file.opts.filename, dots = '';
     while(filePath) {
@@ -348,7 +371,7 @@ TODO:
 - /// <reference path="../../bower_components/.....
 */
   /**
-    THe implementation of this probably isn't spot on, for now I just want to extract enough to generate .d.ts files
+    The implementation of this probably isn't spot on, for now I just want to extract enough to generate .d.ts files
     for the Polymer Material components.
     */
   function parsePolymerBehaviorDefinition(arrayExpression, path, state, memberExpression) {
@@ -368,7 +391,7 @@ TODO:
                                                 t.blockStatement([classDeclaration])));
   }
 
-  function parsePolymerClass(objectExpression, path, state, memberExpression?) {
+  function parsePolymerClass(objectExpression, path, state, memberExpression?, isInterface = false) {
     let className, elementName,
                 extend, behaviors, hostAttributes,
                 properties /*: Array<ClassProperty> */ = [],
@@ -435,7 +458,7 @@ TODO:
       }
     });
 
-    let decorators = []
+    let decorators = [];
     if(elementName) {
       decorators.push(createDecorator('component', elementName));
       if(extend) {
@@ -471,15 +494,34 @@ TODO:
     }
 
     addTypeDefinitionReference(path, state);
+    if(behaviors) {
+      behaviors.forEach( (behavior) => {
+        addTypeDefinitionReference(path, state, toDashCase(behavior.property.name));
+      });
+    }
 
     if(memberExpression) {
       className = memberExpression.property.name;
     }
 
-    let classDeclaration = t.classDeclaration(t.identifier(className),
-                                              t.memberExpression(t.identifier('polymer'), t.identifier('Base')),
-                                              t.classBody(properties.concat(functions)),
-                                              decorators);
+    let classDeclaration;
+    if (isInterface) {
+      properties.forEach( (prop) => {
+        delete prop.decorators;
+        delete prop.value;
+      });
+      functions.forEach( (prop) => {
+        delete prop.decorators;
+        delete prop.body;
+      });
+      classDeclaration = t.interfaceDeclaration(t.identifier(className), null /*typeParameters*/,
+          [], t.classBody(properties.concat(functions)));
+    } else {
+      classDeclaration = t.classDeclaration(t.identifier(className),
+          t.memberExpression(t.identifier('polymer'), t.identifier('Base')),
+          t.classBody(properties.concat(functions)),
+          decorators);
+    }
 
     if(behaviors && !state.opts.useBehaviorDecorator) {
       classDeclaration.implements = behaviors.map( (behavior) => {
@@ -558,7 +600,7 @@ TODO:
                 //module = path.parent.left.object.name;
                 // path.parent.left.property.name
 
-            parsePolymerClass(path.node.arguments[0], path, state, memberExpression);
+            parsePolymerClass(path.node.arguments[0], path, state, memberExpression, false);
           }
         }
       },
@@ -577,11 +619,10 @@ console.info('.......... Call within assignment', state.file.opts.filename);
               //  parsePolymerClass(expression, path, state, path.node.left);
               //}
             } else if(t.isObjectExpression(path.node.right)) {
-              parsePolymerClass(path.node.right, path, state, path.node.left);
+              parsePolymerClass(path.node.right, path, state, path.node.left, true);
             } else if(t.isArrayExpression(path.node.right)) {
               parsePolymerBehaviorDefinition(path.node.right, path, state, path.node.left);
             }
-
           }
         }
       }
